@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/teamflow?schema=public
+
+jobs:
+  build:
+    name: Build, lint and unit test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: teamflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d teamflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate the database client
+        # No native engine is downloaded, see ADR 0008.
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build the packages
+        run: npm run build --workspace @teamflow/contracts && npm run build --workspace @teamflow/database && npm run build --workspace @teamflow/ui && npm run build --workspace @teamflow/api
+
+      - name: Unit tests (web)
+        run: npm run test --workspace @teamflow/web
+
+      - name: Unit tests (database)
+        run: npm run test --workspace @teamflow/database
+
+      - name: Integration tests (api)
+        run: npm run test --workspace @teamflow/api
+
+      - name: Build the web application
+        env:
+          API_URL: http://localhost:4000
+        run: npm run build --workspace @teamflow/web
+
+  e2e:
+    name: End to end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: teamflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d teamflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate the database client
+        env:
+          PRISMA_SCHEMA_ENGINE_BINARY: /bin/true
+          PRISMA_QUERY_ENGINE_LIBRARY: /bin/true
+        run: npx prisma generate --schema packages/database/prisma/schema.prisma
+
+      - name: Apply the migrations
+        run: npx tsx packages/database/scripts/migrate.ts
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the API
+        env:
+          SESSION_SECRET: ci-session-secret-ci-session-secret
+          CORS_ORIGINS: http://localhost:3000
+          COOKIE_SECURE: 'false'
+        run: |
+          npm run build --workspace @teamflow/contracts
+          npm run build --workspace @teamflow/database
+          npm run build --workspace @teamflow/api
+          npm run start --workspace @teamflow/api &
+
+      - name: Build the web application
+        env:
+          API_URL: http://localhost:4000
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+        run: |
+          npm run build --workspace @teamflow/contracts
+          npm run build --workspace @teamflow/ui
+          npm run build --workspace @teamflow/web
+
+      - name: Run the end to end tests
+        env:
+          E2E_WEB_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:4000
+          E2E_SKIP_WEBSERVER: 'true'
+        run: npm run test:e2e --workspace @teamflow/web
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

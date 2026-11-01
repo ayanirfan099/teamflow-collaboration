@@ -43,6 +43,12 @@ __pycache__/
 data/local/
 uploads/
 
+# Generated database client (recreated by `npm run db:generate`)
+packages/database/src/generated/
+
+# Runtime state of the local storage driver
+var/
+
 # Logs
 *.log
 logs/

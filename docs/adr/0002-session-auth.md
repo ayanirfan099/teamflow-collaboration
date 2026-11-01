@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
+- **Updated:** 2026-11-01 (M1 — CSRF token derivation)
 
 ## Context
 
@@ -23,8 +24,16 @@ Use **opaque server-managed sessions** stored in Postgres:
    `room:join`).
 5. "Sign out everywhere" revokes every session of the user.
 
-CSRF protection is a **session-bound double-submit token**: the CSRF cookie value is stored as a
-hash on the session row and must be echoed in the `x-csrf-token` header.
+CSRF protection is a **session-bound double-submit token**:
+
+- The CSRF cookie `tf_csrf` is readable by JavaScript, the session cookie is not.
+- The token itself is `HMAC-SHA256(SESSION_SECRET, sessionId)`, truncated to a URL-safe string.
+  It is _derived_ from the session instead of being stored: the session id is already known to
+  the server, so no extra column and no extra write are needed.
+- Because the token is bound to one session, a token stolen from one session cannot be used to
+  forge a request for another session. The server recomputes the HMAC and compares it with the
+  value of the `x-csrf-token` header in constant time.
+- The cookie and the header must be equal, which is the double-submit part.
 
 ## Alternatives considered
 
@@ -35,6 +44,8 @@ hash on the session row and must be echoed in the `x-csrf-token` header.
 - **SameSite=Strict only, no CSRF token** — rejected: `Strict` breaks legitimate cross-site
   navigation to invitation links, and relying on `SameSite` alone is not sufficient for
   `SameSite=None` deployments.
+- **A random CSRF token stored on the session row** — viable, but it adds a column and a write
+  to the sign-in path. The derived token has the same properties with less state.
 
 ## Consequences
 
@@ -42,3 +53,5 @@ hash on the session row and must be echoed in the `x-csrf-token` header.
 - Horizontal scaling needs no sticky sessions because the session state lives in the database.
 - Cross-origin deployments must use `SameSite=None; Secure`, which requires HTTPS — documented in
   the deployment guide.
+- Rotating `SESSION_SECRET` invalidates every derived CSRF token; the sessions themselves stay
+  valid until they expire.

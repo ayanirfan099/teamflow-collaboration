@@ -38,18 +38,18 @@ components. The API imports `contracts` for DTO validation and `database` for th
 
 ### 3.1 apps/api (NestJS)
 
-| Module | Responsibility |
-| --- | --- |
-| `AuthModule` | Registration, sign-in/out, opaque sessions, CSRF, session revocation. |
-| `UsersModule` | User records and password verification. |
-| `OrganizationsModule` | Organizations, memberships, invitations, member directory. |
-| `ProjectsModule` | Projects, boards, columns, tasks, labels, ordering, search. |
-| `CollaborationModule` | Comments, mentions, activity events, notifications. |
-| `AttachmentsModule` | Upload/download pipeline and the storage abstraction. |
-| `AuditModule` | Append-only audit trail and its restricted read API. |
-| `RealtimeModule` | Socket.IO gateway, room authorization, event fan-out. |
-| `HealthModule` | Liveness and readiness probes. |
-| `CommonModule` | Error envelope, pagination, idempotency, rate limiting, request id, logging. |
+| Module                | Responsibility                                                               |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `AuthModule`          | Registration, sign-in/out, opaque sessions, CSRF, session revocation.        |
+| `UsersModule`         | User records and password verification.                                      |
+| `OrganizationsModule` | Organizations, memberships, invitations, member directory.                   |
+| `ProjectsModule`      | Projects, boards, columns, tasks, labels, ordering, search.                  |
+| `CollaborationModule` | Comments, mentions, activity events, notifications.                          |
+| `AttachmentsModule`   | Upload/download pipeline and the storage abstraction.                        |
+| `AuditModule`         | Append-only audit trail and its restricted read API.                         |
+| `RealtimeModule`      | Socket.IO gateway, room authorization, event fan-out.                        |
+| `HealthModule`        | Liveness and readiness probes.                                               |
+| `CommonModule`        | Error envelope, pagination, idempotency, rate limiting, request id, logging. |
 
 **Request pipeline**
 
@@ -144,18 +144,18 @@ re-balanced only when the key space between two neighbours is exhausted.
 - Rooms: `org:<organizationId>`, `project:<projectId>`, `task:<taskId>`. Joining a room requires
   an active membership; unauthorized joins are rejected and audited.
 - Events are emitted by the API services (`task.created`, `task.updated`, `task.moved`,
-  `comment.created`, `notification.created`) and are the *same* payloads the REST endpoints return.
+  `comment.created`, `notification.created`) and are the _same_ payloads the REST endpoints return.
 - Client-side optimistic updates reconcile with the broadcast payload; a version mismatch triggers
   a rollback and a refetch.
 
 ## 7. Failure behaviour
 
-| Failure | Behaviour |
-| --- | --- |
-| Postgres unreachable | `/ready` returns `503`; requests fail with `503 database_unavailable`; no stack traces leak. |
-| Redis unreachable (optional) | The in-process cache/rate-limit fallback is used and a warning is logged. |
-| WebSocket disconnect | The client refetches the affected queries on reconnect. |
-| Optimistic-concurrency conflict | `409 conflict` with the current server representation. |
+| Failure                         | Behaviour                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| Postgres unreachable            | `/ready` returns `503`; requests fail with `503 database_unavailable`; no stack traces leak. |
+| Redis unreachable (optional)    | The in-process cache/rate-limit fallback is used and a warning is logged.                    |
+| WebSocket disconnect            | The client refetches the affected queries on reconnect.                                      |
+| Optimistic-concurrency conflict | `409 conflict` with the current server representation.                                       |
 
 ## 8. Deployment shape
 

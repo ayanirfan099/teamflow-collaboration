@@ -15,7 +15,7 @@ scoping.
 
 - Every tenant-owned table has a non-null `organizationId` column, and composite indexes start
   with `organizationId`.
-- The API resolves the caller's membership for the requested organization *before* the service
+- The API resolves the caller's membership for the requested organization _before_ the service
   runs, and hands the service a `TenantContext { organizationId, role, userId }`.
 - Repositories take the tenant context as a required argument; there is no "find by id only"
   helper for tenant-owned models. A cross-tenant identifier therefore yields `404`, not `403`,

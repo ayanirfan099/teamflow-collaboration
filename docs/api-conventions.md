@@ -33,22 +33,22 @@ response body. Validation details expose only field names and human-readable rea
 
 ## 2. Error codes
 
-| HTTP | `code` | Meaning |
-| --- | --- | --- |
-| 400 | `validation_failed` | Body/query failed schema validation. |
-| 401 | `unauthenticated` | Missing, malformed or expired session. |
-| 401 | `invalid_credentials` | Sign-in failed (email unknown or password wrong — same message for both). |
-| 403 | `forbidden` | Authenticated but lacking the capability for this action. |
-| 403 | `csrf_failed` | Missing or mismatched CSRF token. |
-| 404 | `<resource>_not_found` | Missing **or** owned by another tenant. |
-| 409 | `conflict` | Optimistic-concurrency version mismatch; `details.current` holds the server state. |
-| 409 | `duplicate` | Unique constraint violated (e.g. member already exists). |
-| 413 | `payload_too_large` | Upload exceeds the configured limit. |
-| 415 | `unsupported_media_type` | Upload MIME type is not allowed. |
-| 422 | `invitation_expired` / `invitation_already_used` | Invitation cannot be accepted. |
-| 429 | `rate_limited` | Too many requests; `Retry-After` header is set. |
-| 500 | `internal_error` | Unexpected server-side failure. |
-| 503 | `service_unavailable` | A required dependency (database) is unavailable. |
+| HTTP | `code`                                           | Meaning                                                                            |
+| ---- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| 400  | `validation_failed`                              | Body/query failed schema validation.                                               |
+| 401  | `unauthenticated`                                | Missing, malformed or expired session.                                             |
+| 401  | `invalid_credentials`                            | Sign-in failed (email unknown or password wrong — same message for both).          |
+| 403  | `forbidden`                                      | Authenticated but lacking the capability for this action.                          |
+| 403  | `csrf_failed`                                    | Missing or mismatched CSRF token.                                                  |
+| 404  | `<resource>_not_found`                           | Missing **or** owned by another tenant.                                            |
+| 409  | `conflict`                                       | Optimistic-concurrency version mismatch; `details.current` holds the server state. |
+| 409  | `duplicate`                                      | Unique constraint violated (e.g. member already exists).                           |
+| 413  | `payload_too_large`                              | Upload exceeds the configured limit.                                               |
+| 415  | `unsupported_media_type`                         | Upload MIME type is not allowed.                                                   |
+| 422  | `invitation_expired` / `invitation_already_used` | Invitation cannot be accepted.                                                     |
+| 429  | `rate_limited`                                   | Too many requests; `Retry-After` header is set.                                    |
+| 500  | `internal_error`                                 | Unexpected server-side failure.                                                    |
+| 503  | `service_unavailable`                            | A required dependency (database) is unavailable.                                   |
 
 ## 3. Authentication
 
@@ -84,15 +84,15 @@ opaque, URL-safe base64 strings; clients must not parse them.
 
 List endpoints accept a documented subset of query parameters, e.g.:
 
-| Parameter | Type | Notes |
-| --- | --- | --- |
-| `q` | string | Free-text search over title and description (trigram/token match). |
-| `assigneeId` | uuid | Exact assignee filter. |
-| `labelIds` | csv | Comma-separated label ids (AND semantics). |
-| `priority` | csv | `low`, `medium`, `high`, `urgent`. |
-| `due` | string | `overdue`, `today`, `week`, `none`. |
-| `status` | string | `open`, `done`, `all`. |
-| `includeArchived` | boolean | Default `false`. |
+| Parameter         | Type    | Notes                                                              |
+| ----------------- | ------- | ------------------------------------------------------------------ |
+| `q`               | string  | Free-text search over title and description (trigram/token match). |
+| `assigneeId`      | uuid    | Exact assignee filter.                                             |
+| `labelIds`        | csv     | Comma-separated label ids (AND semantics).                         |
+| `priority`        | csv     | `low`, `medium`, `high`, `urgent`.                                 |
+| `due`             | string  | `overdue`, `today`, `week`, `none`.                                |
+| `status`          | string  | `open`, `done`, `all`.                                             |
+| `includeArchived` | boolean | Default `false`.                                                   |
 
 Unknown query parameters are ignored rather than rejected, to keep clients forward compatible.
 
@@ -116,12 +116,12 @@ payload returns `409 duplicate`.
 
 ## 9. Rate limiting
 
-| Scope | Limit (default) |
-| --- | --- |
-| `POST /auth/login` | 10 requests / 5 min / IP, and 5 / 15 min / account |
-| `POST /auth/register` | 5 / hour / IP |
-| `POST /invitations` (accept) | 20 / hour / IP |
-| `POST /attachments` | 60 / hour / user |
+| Scope                        | Limit (default)                                    |
+| ---------------------------- | -------------------------------------------------- |
+| `POST /auth/login`           | 10 requests / 5 min / IP, and 5 / 15 min / account |
+| `POST /auth/register`        | 5 / hour / IP                                      |
+| `POST /invitations` (accept) | 20 / hour / IP                                     |
+| `POST /attachments`          | 60 / hour / user                                   |
 
 Responses include `Retry-After`. Limits are configurable per environment.
 
@@ -129,17 +129,17 @@ Responses include `Retry-After`. Limits are configurable per environment.
 
 Socket.IO namespace `/realtime`. The client passes the session cookie during the handshake.
 
-| Direction | Event | Payload |
-| --- | --- | --- |
-| → | `room:join` | `{ room: "project:<id>" }` |
-| → | `room:leave` | `{ room: "project:<id>" }` |
-| ← | `room:joined` / `room:error` | `{ room }` / `{ code, message }` |
-| ← | `task.created` | Task payload |
-| ← | `task.updated` | Task payload |
-| ← | `task.moved` | `{ taskId, columnId, position, version }` |
-| ← | `comment.created` | Comment payload |
-| ← | `notification.created` | Notification payload |
-| ← | `presence.updated` | `{ userId, room, online }` — ephemeral, not persisted |
+| Direction | Event                        | Payload                                               |
+| --------- | ---------------------------- | ----------------------------------------------------- |
+| →         | `room:join`                  | `{ room: "project:<id>" }`                            |
+| →         | `room:leave`                 | `{ room: "project:<id>" }`                            |
+| ←         | `room:joined` / `room:error` | `{ room }` / `{ code, message }`                      |
+| ←         | `task.created`               | Task payload                                          |
+| ←         | `task.updated`               | Task payload                                          |
+| ←         | `task.moved`                 | `{ taskId, columnId, position, version }`             |
+| ←         | `comment.created`            | Comment payload                                       |
+| ←         | `notification.created`       | Notification payload                                  |
+| ←         | `presence.updated`           | `{ userId, room, online }` — ephemeral, not persisted |
 
 ## 11. OpenAPI
 
