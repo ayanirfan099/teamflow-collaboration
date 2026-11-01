@@ -38,3 +38,18 @@ behind a flag; each item is simply not built yet.
   seed script.
 - SSO / SAML / OIDC — password authentication only in v1.
 - MFA / TOTP.
+
+## Planned for v1, but not built yet
+
+The following parts of the v1 scope are implemented on the server but have no (or only a partial)
+user interface yet. They are part of the M4 and M5 milestones and are therefore **not** claimed as
+finished in the milestone report.
+
+- **Attachments** — the storage abstraction, the local driver and the documented S3 adapter are
+  specified; the upload, the download and the attachment UI are still to be built (M4).
+- **Role administration** — inviting a member, changing a role and removing a member work on the
+  API; the management screens are still to be built (M4).
+- **Audit log** — the audit events are recorded and the endpoint is restricted to admins; the
+  read-only view is still to be built (M4).
+- **Operational dashboards** — structured logs with request ids exist; the aggregation and the
+  slow-request metrics are still to be built (M4).

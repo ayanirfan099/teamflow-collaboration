@@ -28,7 +28,7 @@ Both sides consume the package:
 
 - **OpenAPI-generated clients** — rejected as the primary source: generation requires a running
   server or a committed spec file, which reintroduces drift between spec and implementation. The
-  OpenAPI document is still generated *from* the Zod contracts and published at `/api/v1/docs`.
+  OpenAPI document is still generated _from_ the Zod contracts and published at `/api/v1/docs`.
 - **Class-validator DTOs in NestJS** — rejected: decorators are not available to the frontend, so
   the types would still be duplicated.
 - **TypeScript types only, no runtime validation** — rejected: types are erased at runtime, so the

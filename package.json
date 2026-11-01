@@ -1,0 +1,53 @@
+{
+  "name": "teamflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TeamFlow — multi-tenant project management SaaS",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @teamflow/contracts && npm run build --workspace @teamflow/database && npm run build --workspace @teamflow/ui && npm run build --workspace @teamflow/api && npm run build --workspace @teamflow/web",
+    "build:packages": "npm run build --workspace @teamflow/contracts && npm run build --workspace @teamflow/database && npm run build --workspace @teamflow/ui",
+    "typecheck": "npm run build:packages && npm run typecheck --workspace @teamflow/contracts && npm run typecheck --workspace @teamflow/database && npm run typecheck --workspace @teamflow/ui && npm run typecheck --workspace @teamflow/api && npm run typecheck --workspace @teamflow/web",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yml,yaml}\"",
+    "test": "npm run test --workspace @teamflow/contracts && npm run test --workspace @teamflow/database && npm run test --workspace @teamflow/api && npm run test --workspace @teamflow/web",
+    "test:api": "npm run test --workspace @teamflow/api",
+    "test:web": "npm run test --workspace @teamflow/web",
+    "test:e2e": "npm run test:e2e --workspace @teamflow/web",
+    "db:migrate": "npm run db:migrate --workspace @teamflow/database",
+    "db:deploy": "npm run db:deploy --workspace @teamflow/database",
+    "db:seed": "npm run seed --workspace @teamflow/api",
+    "db:reset": "npm run db:reset --workspace @teamflow/database",
+    "db:local": "npm run db:local --workspace @teamflow/database",
+    "dev": "npm run build:packages && concurrently -n api,web -c magenta,cyan \"npm run dev --workspace @teamflow/api\" \"npm run dev --workspace @teamflow/web\"",
+    "dev:api": "npm run dev --workspace @teamflow/api",
+    "dev:web": "npm run dev --workspace @teamflow/web",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist apps/web/.next",
+    "db:generate": "tsx packages/database/scripts/generate.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.16.0",
+    "@types/node": "22.10.2",
+    "@typescript-eslint/eslint-plugin": "8.18.1",
+    "@typescript-eslint/parser": "8.18.1",
+    "concurrently": "9.1.0",
+    "eslint": "9.16.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-react-hooks": "5.1.0",
+    "prettier": "3.4.2",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.18.1"
+  },
+  "optionalDependencies": {
+    "@embedded-postgres/linux-x64": "17.11.0-beta.19"
+  }
+}
