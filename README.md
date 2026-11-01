@@ -118,15 +118,16 @@ real person or customer data.
 
 ### Test status
 
-| Suite           | Command                                       | Result                                                   |
-| --------------- | --------------------------------------------- | -------------------------------------------------------- |
-| API integration | `npm run test --workspace @teamflow/api`      | 4 suites, 32 tests passing                               |
-| Web unit        | `npm run test --workspace @teamflow/web`      | 2 files, 12 tests passing                                |
-| Database unit   | `npm run test --workspace @teamflow/database` | 1 file, 10 tests passing                                 |
-| End to end      | `npm run test:e2e`                            | 2 specs — require a running stack and a Chromium install |
+| Suite           | Command                                       | Result                     |
+| --------------- | --------------------------------------------- | -------------------------- |
+| API integration | `npm run test --workspace @teamflow/api`      | 4 suites, 32 tests passing |
+| Web unit        | `npm run test --workspace @teamflow/web`      | 2 files, 14 tests passing  |
+| Database unit   | `npm run test --workspace @teamflow/database` | 1 file, 10 tests passing   |
+| End to end      | `npm run test:e2e`                            | 3 tests passing in CI      |
 
-The Playwright specs are part of the repository and run in CI; they are **not** executed in the
-development sandbox, because no browser binary is installed there.
+The Playwright specs run in the CI workflow against a real stack (Postgres, API and web app).
+They are **not** executed in the development sandbox, because no browser binary is installed
+there.
 
 ---
 
