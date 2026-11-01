@@ -1,4 +1,18 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+/** Waits for the workspace and reports the page content when the navigation fails. */
+async function expectWorkspace(page: Page): Promise<void> {
+  try {
+    await page.waitForURL('**/my-work', { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
+  } catch (error) {
+    const text = await page
+      .locator('body')
+      .innerText()
+      .catch(() => '');
+    throw new Error(`${String(error)}\nurl: ${page.url()}\npage: ${text.slice(0, 500)}`);
+  }
+}
 
 /**
  * The end-to-end suite runs against a real stack (Next + API + Postgres).
@@ -19,7 +33,7 @@ test('a visitor can register, sign in and sign out', async ({ page }) => {
   await page.getByLabel('Workspace name').fill('E2E Workspace');
   await page.getByRole('button', { name: 'Create account' }).click();
 
-  await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
+  await expectWorkspace(page);
 
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();

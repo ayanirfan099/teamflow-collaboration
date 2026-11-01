@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { apiSend, errorMessage } from '../../../lib/api';
+import { useSession } from '../../../lib/session';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { refresh } = useSession();
   const [form, setForm] = React.useState({
     name: '',
     email: '',
@@ -32,8 +34,8 @@ export default function RegisterPage() {
         password: form.password,
         ...(form.organizationName ? { organizationName: form.organizationName } : {}),
       });
+      await refresh();
       router.push('/my-work');
-      router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);

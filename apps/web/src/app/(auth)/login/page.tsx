@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { apiSend, errorMessage } from '../../../lib/api';
+import { useSession } from '../../../lib/session';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh } = useSession();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -19,8 +21,10 @@ export default function LoginPage() {
     setError(null);
     try {
       await apiSend('/auth/login', 'POST', { email, password });
+      // The session query failed while the visitor was anonymous; it has to be refetched
+      // before the shell can show the workspace.
+      await refresh();
       router.push('/my-work');
-      router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);
