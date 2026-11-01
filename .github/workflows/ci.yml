@@ -115,7 +115,11 @@ jobs:
         run: npx tsx packages/database/scripts/migrate.ts
 
       - name: Install the browser
-        run: npx playwright install --with-deps chromium
+        # Playwright runs the headless shell in the headless mode, the full browser is needed
+        # for the traces and the screenshots.
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright install chromium-headless-shell
 
       - name: Build the API
         run: |
