@@ -14,7 +14,7 @@
   "scripts": {
     "build": "npm run build --workspace @teamflow/contracts && npm run build --workspace @teamflow/database && npm run build --workspace @teamflow/ui && npm run build --workspace @teamflow/api && npm run build --workspace @teamflow/web",
     "build:packages": "npm run build --workspace @teamflow/contracts && npm run build --workspace @teamflow/database && npm run build --workspace @teamflow/ui",
-    "typecheck": "npm run typecheck --workspace @teamflow/contracts && npm run typecheck --workspace @teamflow/database && npm run typecheck --workspace @teamflow/ui && npm run typecheck --workspace @teamflow/api && npm run typecheck --workspace @teamflow/web",
+    "typecheck": "npm run build:packages && npm run typecheck --workspace @teamflow/contracts && npm run typecheck --workspace @teamflow/database && npm run typecheck --workspace @teamflow/ui && npm run typecheck --workspace @teamflow/api && npm run typecheck --workspace @teamflow/web",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yml,yaml}\"",

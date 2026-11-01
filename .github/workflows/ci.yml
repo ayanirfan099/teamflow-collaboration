@@ -50,14 +50,16 @@ jobs:
         # No native engine is downloaded, see ADR 0008.
         run: npm run db:generate
 
+      - name: Build the packages
+        # The API and the web app consume the compiled packages, so they are built before the
+        # type check and the tests.
+        run: npm run build:packages && npm run build --workspace @teamflow/api
+
       - name: Lint
         run: npm run lint
 
       - name: Type check
         run: npm run typecheck
-
-      - name: Build the packages
-        run: npm run build --workspace @teamflow/contracts && npm run build --workspace @teamflow/database && npm run build --workspace @teamflow/ui && npm run build --workspace @teamflow/api
 
       - name: Unit tests (web)
         run: npm run test --workspace @teamflow/web
