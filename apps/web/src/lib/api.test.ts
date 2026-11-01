@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ApiError, apiGet, buildQuery, errorMessage } from './api';
+import { ApiError, apiGet, apiSend, buildQuery, errorMessage } from './api';
 
 describe('buildQuery', () => {
   it('skips empty values and joins arrays', () => {
@@ -71,5 +71,47 @@ describe('apiGet', () => {
       expect(apiError.code).toBe('unexpected_error');
       expect(errorMessage(apiError)).toContain('502');
     });
+  });
+
+  it('fetches the CSRF token before a state changing request', async () => {
+    // The browser holds the token in a readable cookie; the mock writes it there.
+    document.cookie = 'tf_csrf=token-from-server';
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: { id: '1' } }),
+    });
+
+    await apiSend('/things', 'POST', { name: 'x' });
+
+    const [, options] = fetchMock.mock.calls[0]!;
+    const headers = (options as RequestInit).headers as Record<string, string>;
+    expect(headers['x-csrf-token']).toBe('token-from-server');
+  });
+
+  it('requests the CSRF token when the cookie is missing', async () => {
+    document.cookie = 'tf_csrf=; Max-Age=0';
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/auth/csrf')) {
+        document.cookie = 'tf_csrf=fresh-token';
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ data: { token: 'fresh-token' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: { id: '1' } }),
+      };
+    });
+
+    await apiSend('/things', 'POST', { name: 'x' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, options] = fetchMock.mock.calls[1]!;
+    const headers = (options as RequestInit).headers as Record<string, string>;
+    expect(headers['x-csrf-token']).toBe('fresh-token');
   });
 });

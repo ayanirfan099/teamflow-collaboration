@@ -87,6 +87,30 @@ export function buildQuery(query: RequestOptions['query']): string {
   return serialized ? `?${serialized}` : '';
 }
 
+let csrfRequest: Promise<string> | null = null;
+
+/**
+ * Makes sure that the readable CSRF cookie exists.
+ *
+ * The API rejects every state changing request that does not echo the cookie in the
+ * `x-csrf-token` header. The cookie is set by `GET /auth/csrf` (and refreshed by the sign-in
+ * response), so the first request of the app fetches it.
+ */
+export async function ensureCsrfToken(): Promise<string> {
+  const existing = readCsrfToken();
+  if (existing) {
+    return existing;
+  }
+  if (!csrfRequest) {
+    csrfRequest = apiGet<{ token: string }>('/auth/csrf')
+      .then(() => readCsrfToken())
+      .finally(() => {
+        csrfRequest = null;
+      });
+  }
+  return csrfRequest;
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
@@ -98,7 +122,7 @@ export async function apiRequest<T>(
     headers['content-type'] = 'application/json';
   }
   if (method !== 'GET') {
-    const token = readCsrfToken();
+    const token = await ensureCsrfToken();
     if (token) {
       headers['x-csrf-token'] = token;
     }
