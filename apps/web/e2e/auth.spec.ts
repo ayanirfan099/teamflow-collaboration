@@ -38,7 +38,9 @@ test('a visitor can register, sign in and sign out', async ({ page }) => {
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
 
-  await expect(page.getByText('You are not signed in.')).toBeVisible();
+  // Signing out clears the session and sends the visitor back to the sign-in form.
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 });
 
 test('invalid credentials are rejected with a readable message', async ({ page }) => {
