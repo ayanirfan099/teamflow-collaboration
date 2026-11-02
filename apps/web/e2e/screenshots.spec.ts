@@ -26,7 +26,21 @@ async function expectWorkspace(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
 }
 
+/**
+ * Takes a screenshot of the current view.
+ *
+ * The toasts are dismissed and the page is scrolled to the top first, so the image shows the
+ * application and not the leftovers of the last action.
+ */
 async function shoot(page: Page, name: string): Promise<void> {
+  const dismiss = page.getByRole('button', { name: 'Dismiss' });
+  const toasts = await dismiss.count();
+  for (let index = 0; index < toasts; index += 1) {
+    await dismiss.first().click();
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(300);
+
   await mkdir(dirname(join(TARGET, name)), { recursive: true });
   await page.screenshot({ path: join(TARGET, name), fullPage: false });
 }

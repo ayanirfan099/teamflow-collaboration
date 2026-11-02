@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* The design system lives in a workspace package outside of this app. Tailwind only scans the
+   sources of the app itself, so the package has to be added explicitly — otherwise the classes
+   that are only used in `packages/ui` are missing from the built stylesheet. */
+@source '../../../../packages/ui/src';
+
 @theme {
   --color-surface: #faf6f1;
   --color-surface-raised: #fffdfa;
