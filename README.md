@@ -3,11 +3,13 @@
 > Multi-tenant project-management platform with role-based access, Kanban workflows, authenticated
 > real-time collaboration, attachments and audit trails.
 
-**Status:** M0–M5 implemented. The foundation (M0), the workspaces, boards and collaboration
-(M1–M3) are merged; **M4 and M5** — attachments, role administration, audit log, search and
-filters, the session management, the end-to-end journeys, the accessibility audit, the benchmark
-and the deployment guide — are in the pull request that carries this branch. The remaining gaps
-are listed in [`docs/out-of-scope.md`](docs/out-of-scope.md).
+**Status:** released as **[v1.0.0](https://github.com/ayanirfan099/teamflow-collaboration/releases/tag/v1.0.0)**.
+The milestones **M0–M5** are merged: the foundation (M0), the workspaces, boards and
+collaboration (M1–M3) with PR #2, **M4 and M5** — attachments, role administration, audit log,
+search and filters, the session management, the end-to-end journeys, the accessibility audit, the
+benchmark and the deployment guide — with PR #3. The changelog is in
+[`CHANGELOG.md`](CHANGELOG.md), the remaining gaps are listed in
+[`docs/out-of-scope.md`](docs/out-of-scope.md).
 
 ---
 
@@ -27,6 +29,7 @@ suite `apps/web/e2e/screenshots.spec.ts` against a real stack and commits the PN
 
 | Document                                                       | Purpose                                                                                                                     |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [`CHANGELOG.md`](CHANGELOG.md)                                 | The changes of every release                                                                                                |
 | [`docs/product-requirements.md`](docs/product-requirements.md) | Personas, role/capability matrix, functional requirements, acceptance criteria                                              |
 | [`docs/architecture.md`](docs/architecture.md)                 | System context, repository layout, data model, request pipeline, ordering and real-time design                              |
 | [`docs/api-conventions.md`](docs/api-conventions.md)           | Envelopes, error codes, auth, pagination, filtering, concurrency, idempotency, rate limits, attachments, real-time protocol |
@@ -65,8 +68,11 @@ npm workspaces (see [ADR 0001](docs/adr/0001-monorepo-npm-workspaces.md)).
 | **M1**    | Monorepo, Prisma schema and SQL migrations, NestJS + Next.js shell, sessions, organizations, seed, CI    | ✅ merged (PR #2) |
 | **M2**    | Projects, boards, columns, tasks, sparse ordering, labels, search, tenant-isolation tests, responsive UI | ✅ merged (PR #2) |
 | **M3**    | Comments, mentions, notifications, authenticated WebSocket rooms, activity timeline, concurrency         | ✅ merged (PR #2) |
-| **M4**    | Attachments, role administration, audit log, sessions, search and filters, rate limiting, access log     | 🟡 this branch    |
-| **M5**    | Playwright journeys, mobile viewport, accessibility audit, screenshots, benchmark, deployment guide      | 🟡 this branch    |
+| **M4**    | Attachments, role administration, audit log, sessions, search and filters, rate limiting, access log     | ✅ merged (PR #3) |
+| **M5**    | Playwright journeys, mobile viewport, accessibility audit, screenshots, benchmark, deployment guide      | ✅ merged (PR #3) |
+
+The first release is **v1.0.0** — the milestones M0–M5 with the changelog in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -184,9 +190,10 @@ real person or customer data.
 | Contracts unit  | `npm run test --workspace @teamflow/contracts` | 1 file, 8 tests passing    |
 | Web unit        | `npm run test --workspace @teamflow/web`       | 2 files, 14 tests passing  |
 | Database unit   | `npm run test --workspace @teamflow/database`  | 1 file, 10 tests passing   |
-| End to end      | `npm run test:e2e`                             | 6 specs, run in CI         |
+| End to end      | `npm run test:e2e`                             | 8 tests passing in CI      |
 
-The Playwright specs run in the CI workflow against a real stack (Postgres, API and web app):
+The Playwright specs run in the CI workflow against a real stack (Postgres, API and web app)
+— 8 tests, one skipped because the screenshots run in their own job:
 the sign-up and sign-in, the board with the drag-and-drop and the keyboard alternative, the
 complete journey (register → invite a teammate → project → task → move → comment with a mention
 → activity), the workflow on a phone (390 × 844), an accessibility scan with axe-core and the

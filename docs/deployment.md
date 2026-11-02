@@ -113,6 +113,9 @@ npm run dev --workspace @teamflow/web
 
 ## 5. The release of a new version
 
+The released versions are tagged on `main`; the notes of every version are in
+[`CHANGELOG.md`](../CHANGELOG.md). The procedure below builds the images of a new version:
+
 ```bash
 # 1. build everything exactly as CI does
 npm ci --no-audit --no-fund
