@@ -3,6 +3,9 @@
 Listing these keeps the milestone plan honest. Nothing below is partially implemented or hidden
 behind a flag; each item is simply not built yet.
 
+None of it is part of the release **v1.0.0** — what that release contains is written down in the
+changelog ([`CHANGELOG.md`](../CHANGELOG.md)).
+
 ## Product
 
 - Billing, subscriptions, invoices and payment processing.
