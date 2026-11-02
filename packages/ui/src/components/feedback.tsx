@@ -59,7 +59,7 @@ export function ErrorState({
       )}
     >
       <p className="text-sm font-semibold text-danger-strong">{title}</p>
-      <p className="max-w-sm text-sm text-danger-strong/80">{message}</p>
+      <p className="max-w-sm text-sm text-danger-strong">{message}</p>
       {onRetry ? (
         <button
           type="button"

@@ -16,10 +16,12 @@ const EVENTS = [
   'task.moved',
   'task.deleted',
   'comment.created',
+  'comment.updated',
   'notification.created',
   'project.created',
   'project.updated',
   'project.deleted',
+  'presence.updated',
 ];
 
 /**

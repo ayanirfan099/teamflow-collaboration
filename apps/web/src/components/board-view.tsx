@@ -33,6 +33,15 @@ export interface BoardViewProps {
   onCreateTask: (columnId: string) => void;
   /** Switches between the board and the list view. */
   view: 'board' | 'list';
+  /** The active filters; the board only shows the matching tasks. */
+  filters?: {
+    q?: string;
+    assigneeId?: string;
+    labelIds?: string[];
+    priority?: string[];
+    due?: 'overdue' | 'today' | 'week' | 'none';
+    status?: 'open' | 'done' | 'archived' | 'all';
+  };
 }
 
 /**
@@ -49,10 +58,16 @@ export function BoardView({
   onOpenTask,
   onCreateTask,
   view,
+  filters,
 }: BoardViewProps) {
   const { data, isLoading, isError, refetch } = useTasks(organizationId, {
     boardId,
-    status: 'all',
+    status: filters?.status ?? 'all',
+    q: filters?.q,
+    assigneeId: filters?.assigneeId,
+    labelIds: filters?.labelIds,
+    priority: filters?.priority,
+    due: filters?.due,
     limit: 100,
   });
   const moveTask = useMoveTask(organizationId);
@@ -81,7 +96,7 @@ export function BoardView({
       return;
     }
 
-    const task = tasks.find((entry) => entry.id === active.id);
+    const task = tasks.find((entry) => entry.id === String(active.id));
     if (!task) {
       return;
     }
@@ -259,8 +274,8 @@ function SortableTask({
         columns={columns}
         onOpen={onOpen}
         onMove={onMove}
-        isDragging={isDragging}
         dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
       />
     </div>
   );

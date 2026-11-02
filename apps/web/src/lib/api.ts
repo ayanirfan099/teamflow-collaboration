@@ -172,6 +172,56 @@ export async function apiSend<T>(
   return apiRequest<T>(path, { ...options, method, body });
 }
 
+/**
+ * Uploads a file.
+ *
+ * The browser sets the `multipart/form-data` boundary itself, so the content type must not be
+ * set here. The CSRF token is sent like with every other state changing request.
+ */
+export async function apiUpload<T>(
+  path: string,
+  file: File,
+  options: Omit<RequestOptions, 'method' | 'body'> = {},
+): Promise<Envelope<T>> {
+  const method = 'POST';
+  const headers: Record<string, string> = { accept: 'application/json', ...options.headers };
+
+  const token = await ensureCsrfToken();
+  if (token) {
+    headers['x-csrf-token'] = token;
+  }
+
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch(`/api/v1${path}${buildQuery(options.query)}`, {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body: form,
+    signal: options.signal,
+  });
+
+  const payload = await parseBody(response);
+
+  if (!response.ok) {
+    const body = (payload ?? {}) as Partial<ApiErrorBody>;
+    throw new ApiError(
+      response.status,
+      body.error
+        ? (body as ApiErrorBody)
+        : {
+            error: {
+              code: 'unexpected_error',
+              message: `Request failed with status ${response.status}.`,
+            },
+          },
+    );
+  }
+
+  return (payload ?? { data: null as unknown as T }) as Envelope<T>;
+}
+
 /** A human readable message for any thrown value. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {

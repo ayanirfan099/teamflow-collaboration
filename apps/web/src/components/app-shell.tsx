@@ -45,11 +45,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const organizationId = activeOrganizationId ?? '';
+  const isAdmin = activeMembership?.role === 'OWNER' || activeMembership?.role === 'ADMIN';
   const navItems = [
     { href: '/my-work', label: 'My Work' },
     { href: `/organizations/${organizationId}/projects`, label: 'Projects' },
+    { href: `/organizations/${organizationId}/search`, label: 'Search' },
     { href: `/organizations/${organizationId}/directory`, label: 'Directory' },
+    { href: `/organizations/${organizationId}/members`, label: 'Members' },
     { href: `/organizations/${organizationId}/activity`, label: 'Activity' },
+    ...(isAdmin ? [{ href: `/organizations/${organizationId}/audit`, label: 'Audit' }] : []),
   ];
 
   return (
@@ -118,6 +122,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/my-work">My Work</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/account">Account &amp; sessions</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void signOut()}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
