@@ -120,8 +120,9 @@ test('the whole journey works: project, task, comment, mention and activity', as
   // --- The activity timeline shows the change. -------------------------------------
   await page.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('link', { name: 'Activity' }).first().click();
-  await expect(page.getByText(/commented on "Write the release notes"/)).toBeVisible();
-  await expect(page.getByText(/moved "Write the release notes"/)).toBeVisible();
+  // The owner wrote two comments, so the timeline holds two entries about the task.
+  await expect(page.getByText(/commented on "Write the release notes"/).first()).toBeVisible();
+  await expect(page.getByText(/moved "Write the release notes"/).first()).toBeVisible();
 
   await teammateContext.close();
 });
