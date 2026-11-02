@@ -51,23 +51,30 @@ export default function ProjectPage() {
   const boards = useBoards(organizationId, projectId);
   const [boardId, setBoardId] = React.useState<string | null>(null);
   const columns = useColumns(organizationId, boardId);
-  const [openTask, setOpenTask] = React.useState<TaskDto | null>(null);
+  const [openTaskId, setOpenTaskId] = React.useState<string | null>(null);
   const [creatingInColumn, setCreatingInColumn] = React.useState<string | null>(null);
 
-  // A link from the search opens the task directly (`?task=<id>`).
-  const requestedTaskId = searchParams.get('task');
+  // All the tasks of the project, also the completed and the archived ones. The open task is
+  // looked up in this list, so the dialog always works with the current version of the task.
   const requestedTask = useTasks(organizationId, {
     projectId,
     status: 'all',
     limit: 100,
   });
+  const openTask =
+    openTaskId === null
+      ? null
+      : ((requestedTask.data?.data ?? []).find((task) => task.id === openTaskId) ?? null);
+
+  // A link from the search opens the task directly (`?task=<id>`).
+  const requestedTaskId = searchParams.get('task');
   React.useEffect(() => {
     if (!requestedTaskId) {
       return;
     }
     const match = (requestedTask.data?.data ?? []).find((task) => task.id === requestedTaskId);
     if (match) {
-      setOpenTask(match);
+      setOpenTaskId(match.id);
     }
   }, [requestedTaskId, requestedTask.data]);
 
@@ -137,7 +144,7 @@ export default function ProjectPage() {
           organizationId={organizationId}
           projectId={projectId}
           boardId={activeBoardId}
-          onOpenTask={setOpenTask}
+          onOpenTask={(task) => setOpenTaskId(task.id)}
           onCreateTask={(columnId) => setCreatingInColumn(columnId)}
         />
       )}
@@ -146,7 +153,7 @@ export default function ProjectPage() {
         organizationId={organizationId}
         task={openTask}
         columns={columns.data ?? []}
-        onClose={() => setOpenTask(null)}
+        onClose={() => setOpenTaskId(null)}
       />
 
       {creatingInColumn ? (

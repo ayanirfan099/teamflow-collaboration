@@ -10,7 +10,13 @@ const AVATAR_TONES = [
   'bg-[#E4E1D3] text-[#5E5733]',
 ] as const;
 
-function initials(name: string): string {
+/**
+ * The initials of a name.
+ *
+ * The function is exported, so a button that only shows the avatar can name itself with the
+ * same initials — the visible text has to be part of the accessible name (WCAG 2.5.3).
+ */
+export function avatarInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) {
     return '?';
@@ -53,7 +59,7 @@ export function Avatar({ name, src, size = 'sm', className, ...props }: AvatarPr
       ) : (
         // The initials are a visual abbreviation. They are hidden from the accessibility tree,
         // so a button that only shows the avatar keeps a name that contains its visible text.
-        <span aria-hidden="true">{initials(name)}</span>
+        <span aria-hidden="true">{avatarInitials(name)}</span>
       )}
       <span className="sr-only">{name}</span>
     </span>

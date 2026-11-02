@@ -2,6 +2,7 @@
 
 import {
   Avatar,
+  avatarInitials,
   Badge,
   DropdownMenu,
   DropdownMenuContent,
@@ -107,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  aria-label="Account menu"
+                  aria-label={`${avatarInitials(session.user.name)} — account menu`}
                 >
                   <Avatar name={session.user.name} size="sm" />
                 </button>

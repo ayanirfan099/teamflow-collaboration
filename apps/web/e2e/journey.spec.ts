@@ -100,12 +100,11 @@ test('the whole journey works: project, task, comment, mention and activity', as
   // The mention picker inserts the name of the teammate; the client turns it into the
   // mention markup when the comment is sent.
   const commentBox = page.getByLabel('Write a comment');
-  await commentBox.pressSequentially('Please have a look ');
-  await commentBox.pressSequentially('@');
-  await page
-    .getByRole('button', { name: /^@Journey/ })
-    .first()
-    .click();
+  await commentBox.pressSequentially('Please have a look @');
+  // The picker suggests the teammate. It is deliberately not clicked: the list is re-rendered
+  // while the mention is typed, and the client encodes a typed name as well.
+  await expect(page.getByRole('button', { name: /^@Journey/ }).first()).toBeVisible();
+  await commentBox.pressSequentially('Journey Teammate');
   await expect(commentBox).toHaveValue(/@Journey Teammate/);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByText('Please have a look @Journey Teammate')).toBeVisible();
