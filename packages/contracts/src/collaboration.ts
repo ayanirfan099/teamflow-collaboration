@@ -49,19 +49,6 @@ export const activityEventSchema = z.object({
   createdAt: isoDateTimeSchema,
 });
 
-export const attachmentSchema = z.object({
-  id: idSchema,
-  organizationId: idSchema,
-  taskId: idSchema.nullable(),
-  commentId: idSchema.nullable(),
-  fileName: z.string(),
-  contentType: z.string(),
-  size: z.number().int(),
-  storageKey: z.string(),
-  uploadedById: idSchema,
-  createdAt: isoDateTimeSchema,
-});
-
 export const auditEventSchema = z.object({
   id: idSchema,
   organizationId: idSchema,
@@ -114,7 +101,6 @@ export const auditQuerySchema = z.object({
 export type NotificationDto = z.infer<typeof notificationSchema>;
 export type CommentDto = z.infer<typeof commentSchema>;
 export type ActivityEventDto = z.infer<typeof activityEventSchema>;
-export type AttachmentDto = z.infer<typeof attachmentSchema>;
 export type AuditEventDto = z.infer<typeof auditEventSchema>;
 export type CreateCommentRequest = z.infer<typeof createCommentRequestSchema>;
 export type MarkNotificationsReadRequest = z.infer<typeof markNotificationsReadRequestSchema>;

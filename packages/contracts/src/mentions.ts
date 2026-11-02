@@ -69,3 +69,30 @@ export function renderMentionMarkup(body: string): string {
 export function buildMention(name: string, userId: string): string {
   return `@[${name.trim()}](user:${userId})`;
 }
+
+/**
+ * Turns the readable form of a comment back into the stored markup.
+ *
+ * The comment box shows `@Ada Lovelace`, but the API stores `@[Ada Lovelace](user:…)`, so the
+ * readable form has to be encoded again before it is sent. The longest names are replaced first,
+ * so `@Ann` does not swallow the beginning of `@Anna`.
+ */
+export function encodeMentions(
+  text: string,
+  members: Array<{ name: string; userId: string }>,
+): string {
+  let result = text;
+  const sorted = [...members].sort((a, b) => b.name.trim().length - a.name.trim().length);
+  for (const member of sorted) {
+    const name = member.name.trim();
+    if (name === '') {
+      continue;
+    }
+    const markup = buildMention(name, member.userId);
+    if (result.includes(markup)) {
+      continue;
+    }
+    result = result.split(`@${name}`).join(markup);
+  }
+  return result;
+}

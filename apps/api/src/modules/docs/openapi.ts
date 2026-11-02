@@ -25,6 +25,8 @@ import {
   organizationSchema,
   invitationSchema,
   sessionSchema,
+  attachmentSchema,
+  updateCommentRequestSchema,
 } from '@teamflow/contracts';
 
 extendZodWithOpenApi(z);
@@ -50,6 +52,7 @@ registry.register('Board', boardSchema);
 registry.register('Column', columnSchema);
 registry.register('Label', labelSchema);
 registry.register('Task', taskSchema);
+registry.register('Attachment', attachmentSchema);
 
 registry.registerPath({
   method: 'get',
@@ -227,6 +230,136 @@ registry.registerPath({
     200: { description: 'The invitation was accepted.' },
     410: { description: 'The invitation expired or was already used.' },
   },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/organizations/{organizationId}/tasks/{taskId}/attachments',
+  summary: 'Lists the attachments of a task.',
+  responses: {
+    200: {
+      description: 'The attachments.',
+      content: {
+        'application/json': {
+          schema: z.object({
+            data: z.array(attachmentSchema),
+            meta: z.object({
+              limit: z.number().int(),
+              hasMore: z.boolean(),
+              nextCursor: z.string().nullable(),
+            }),
+          }),
+        },
+      },
+    },
+    404: { description: 'The task does not exist or is not accessible.' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/organizations/{organizationId}/tasks/{taskId}/attachments',
+  summary: 'Uploads an attachment to a task.',
+  request: {
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: z.object({ file: z.string().openapi({ format: 'binary' }) }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'The new attachment.',
+      content: { 'application/json': { schema: z.object({ data: attachmentSchema }) } },
+    },
+    413: { description: 'The file is larger than the allowed size.' },
+    415: { description: 'The content type is not allowed.' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/organizations/{organizationId}/attachments/{attachmentId}/download',
+  summary: 'Downloads an attachment. The response is always a download, never inline.',
+  responses: {
+    200: {
+      description: 'The file.',
+      content: { 'application/octet-stream': { schema: z.string().openapi({ format: 'binary' }) } },
+    },
+    404: { description: 'The attachment does not exist or is not accessible.' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/organizations/{organizationId}/attachments/{attachmentId}',
+  summary: 'Removes an attachment.',
+  responses: {
+    200: { description: 'The attachment was removed.' },
+    404: { description: 'The attachment does not exist or is not accessible.' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/organizations/{organizationId}/comments/{commentId}',
+  summary: 'Edits a comment. Only the author may edit their own comment.',
+  request: {
+    body: { content: { 'application/json': { schema: updateCommentRequestSchema } } },
+  },
+  responses: {
+    200: { description: 'The updated comment.' },
+    403: { description: 'The comment belongs to somebody else.' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/organizations/{organizationId}/tasks/{taskId}/presence',
+  summary: 'The ephemeral presence of a task. Presence is never persisted and never audited.',
+  responses: {
+    200: {
+      description: 'The people that have the task open.',
+      content: {
+        'application/json': {
+          schema: z.object({
+            data: z.array(z.object({ userId: z.string(), name: z.string(), since: z.string() })),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/organizations/{organizationId}/audit',
+  summary: 'The audit log. Only owners and admins may read it.',
+  responses: {
+    200: { description: 'The audit events.' },
+    403: { description: 'The role may not read the audit log.' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/auth/sessions',
+  summary: 'The active sessions of the current user.',
+  responses: {
+    200: {
+      description: 'The sessions.',
+      content: { 'application/json': { schema: z.object({ data: z.array(sessionSchema) }) } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/auth/logout-all',
+  summary: 'Revokes every session of the current user ("sign out everywhere").',
+  responses: { 201: { description: 'The number of revoked sessions.' } },
 });
 
 registry.registerPath({
@@ -469,6 +602,7 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV31['generate
       { name: 'projects', description: 'Projects, boards and columns' },
       { name: 'tasks', description: 'Tasks and their order' },
       { name: 'collaboration', description: 'Comments, mentions, notifications and activity' },
+      { name: 'attachments', description: 'Attachments of a task' },
       { name: 'health', description: 'Liveness and readiness' },
     ],
   });

@@ -23,6 +23,22 @@ export const emailSchema = z
 /** Page size. The API never returns more rows than the client asked for. */
 export const limitSchema = z.coerce.number().int().min(1).max(100).default(25);
 
+/**
+ * A repeatable query parameter.
+ *
+ * A query string carries a list either as `?labelIds=a&labelIds=b` or as `?labelIds=a,b`.
+ * Both forms are accepted and always produce an array.
+ */
+export function arrayParam<T extends z.ZodTypeAny>(item: T) {
+  return z.preprocess((value) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const entries = Array.isArray(value) ? value : String(value).split(',');
+    return entries.map((entry) => String(entry).trim()).filter((entry) => entry.length > 0);
+  }, z.array(item).optional());
+}
+
 export const booleanish = z
   .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
   .transform((value) => value === true || value === 'true' || value === '1');

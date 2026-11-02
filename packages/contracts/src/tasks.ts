@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { idSchema, isoDateTimeSchema, limitSchema } from './common';
+import { arrayParam, idSchema, isoDateTimeSchema, limitSchema } from './common';
 
 export const TASK_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
-export const TASK_STATUSES = ['OPEN', 'DONE'] as const;
+export const TASK_STATUSES = ['OPEN', 'DONE', 'ARCHIVED'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const taskAssigneeSchema = z.object({
@@ -78,10 +78,10 @@ export const taskQuerySchema = z.object({
   projectId: idSchema.optional(),
   columnId: idSchema.optional(),
   assigneeId: idSchema.optional(),
-  labelIds: z.array(idSchema).max(20).optional(),
-  priority: z.array(z.enum(TASK_PRIORITIES)).max(4).optional(),
+  labelIds: arrayParam(idSchema).transform((value) => value?.slice(0, 20)),
+  priority: arrayParam(z.enum(TASK_PRIORITIES)).transform((value) => value?.slice(0, 4)),
   due: z.enum(['overdue', 'today', 'week', 'none']).optional(),
-  status: z.enum(['open', 'done', 'all']).default('open'),
+  status: z.enum(['open', 'done', 'archived', 'all']).default('open'),
   limit: limitSchema,
   cursor: z.string().min(1).max(512).optional(),
 });

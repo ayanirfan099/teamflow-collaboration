@@ -34,7 +34,7 @@ export class RateLimitGuard implements CanActivate {
       response.setHeader('x-ratelimit-remaining', String(decision.remaining));
       if (!decision.allowed) {
         response.setHeader('retry-after', String(decision.retryAfterSeconds));
-        throw AppException.forbidden('rate_limited', 'Too many requests. Please try again later.');
+        throw AppException.tooManyRequests('Too many requests. Please try again later.');
       }
     }
 

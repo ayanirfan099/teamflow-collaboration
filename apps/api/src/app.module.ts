@@ -8,7 +8,9 @@ import { OrganizationGuard } from './common/guards/organization.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { IdempotencyInterceptor } from './common/idempotency/idempotency.interceptor';
+import { AccessLogMiddleware } from './common/middleware/access-log.middleware';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CollaborationModule } from './modules/collaboration/collaboration.module';
@@ -41,6 +43,7 @@ import { TasksModule } from './modules/tasks/tasks.module';
     CollaborationModule,
     ProjectsModule,
     TasksModule,
+    AttachmentsModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
@@ -55,5 +58,6 @@ import { TasksModule } from './modules/tasks/tasks.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(RequestContextMiddleware).forRoutes('*');
+    consumer.apply(AccessLogMiddleware).forRoutes('*');
   }
 }
