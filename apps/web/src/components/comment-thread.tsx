@@ -21,6 +21,9 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
   const { toast } = useToast();
 
   const [body, setBody] = React.useState('');
+  // The draft is also kept in a ref, so the box is only cleared when it still holds the
+  // comment that was sent. A comment that is written while the request is running is kept.
+  const draft = React.useRef('');
   const [showMentions, setShowMentions] = React.useState(false);
 
   const comments = data ?? [];
@@ -34,8 +37,11 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
     try {
       // A mention that was typed by hand is encoded here as well, so "@Ada" notifies Ada.
       await createComment.mutateAsync(encodeMentions(trimmed, members));
-      setBody('');
-      setShowMentions(false);
+      if (draft.current.trim() === trimmed) {
+        draft.current = '';
+        setBody('');
+        setShowMentions(false);
+      }
     } catch (error) {
       toast({
         title: 'The comment could not be saved',
@@ -47,7 +53,9 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
 
   function insertMention(member: MemberDto) {
     // The readable name is inserted; the markup is added when the comment is sent.
-    setBody((current) => `${current}@${member.name} `);
+    const next = `${draft.current}@${member.name} `;
+    draft.current = next;
+    setBody(next);
     setShowMentions(false);
   }
 
@@ -85,7 +93,10 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
           id="comment-body"
           value={body}
           placeholder="Write a comment — use @ to mention a teammate"
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => {
+            draft.current = event.target.value;
+            setBody(event.target.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === '@') {
               setShowMentions(true);

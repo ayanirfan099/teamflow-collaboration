@@ -65,13 +65,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <div className="flex-1">
               <p className="text-sm font-medium">{item.title}</p>
               {item.description ? (
-                <p className="mt-0.5 text-xs opacity-80">{item.description}</p>
+                <p className="mt-0.5 text-xs text-ink-muted">{item.description}</p>
               ) : null}
             </div>
             <button
               type="button"
               onClick={() => dismiss(item.id)}
-              className="rounded p-1 text-xs opacity-70 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="rounded p-1 text-xs text-ink-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Dismiss
             </button>

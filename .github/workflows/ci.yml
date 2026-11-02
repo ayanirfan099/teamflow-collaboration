@@ -297,7 +297,18 @@ jobs:
       - name: Commit the screenshots
         env:
           BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+          PUSH_SCREENSHOTS: ${{ github.event_name != 'pull_request' }}
         run: |
+          # The screenshots are committed by the run of the push. A run that was triggered by
+          # the bot itself would take a new screenshot of a new timestamp and push it again.
+          if [ "$PUSH_SCREENSHOTS" != "true" ]; then
+            echo "the screenshots are committed by the run of the push"
+            exit 0
+          fi
+          if [ "$(git log -1 --format='%an')" = "github-actions[bot]" ]; then
+            echo "the screenshots were refreshed by the previous run"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/screenshots
@@ -305,5 +316,13 @@ jobs:
             echo "the screenshots did not change"
           else
             git commit -m "docs: refresh the screenshots of the README"
-            git push origin "HEAD:$BRANCH"
+            # The branch can move while the screenshots are taken, so the commit is put on
+            # top of the current head of the branch before it is pushed.
+            git fetch origin "$BRANCH"
+            if git rebase "origin/$BRANCH"; then
+              git push origin "HEAD:$BRANCH"
+            else
+              echo "the branch moved, the screenshots are refreshed in the next run"
+              git rebase --abort
+            fi
           fi

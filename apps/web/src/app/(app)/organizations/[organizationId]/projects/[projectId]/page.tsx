@@ -61,10 +61,20 @@ export default function ProjectPage() {
     status: 'all',
     limit: 100,
   });
-  const openTask =
+  const liveTask =
     openTaskId === null
       ? null
       : ((requestedTask.data?.data ?? []).find((task) => task.id === openTaskId) ?? null);
+
+  // The last known version of the open task. The dialog keeps it while the list is refetched,
+  // so the dialog does not close in the middle of a comment and the draft is not lost.
+  const lastTask = React.useRef<TaskDto | null>(null);
+  React.useEffect(() => {
+    if (liveTask) {
+      lastTask.current = liveTask;
+    }
+  }, [liveTask]);
+  const openTask = liveTask ?? (openTaskId === null ? null : lastTask.current);
 
   // A link from the search opens the task directly (`?task=<id>`).
   const requestedTaskId = searchParams.get('task');
