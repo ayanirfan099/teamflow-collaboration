@@ -157,7 +157,9 @@ export function useNotifications(organizationId: string | null) {
   return useQuery({
     queryKey: ['notifications', organizationId],
     enabled: Boolean(organizationId),
-    refetchInterval: 60_000,
+    // The live connection refreshes the list as soon as a notification arrives. The interval
+    // is the fallback for a client whose socket is not connected.
+    refetchInterval: 15_000,
     queryFn: async () => {
       const response = await apiGet<NotificationDto[]>(
         `/organizations/${organizationId}/notifications`,

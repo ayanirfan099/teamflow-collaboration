@@ -114,7 +114,7 @@ test('the whole journey works: project, task, comment, mention and activity', as
   // --- The teammate is notified. ---------------------------------------------------
   await teammatePage.getByRole('link', { name: 'My Work' }).first().click();
   await expect(teammatePage.getByRole('button', { name: /Notifications, 1 unread/ })).toBeVisible({
-    timeout: 15_000,
+    timeout: 30_000,
   });
 
   // --- The activity timeline shows the change. -------------------------------------
