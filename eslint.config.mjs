@@ -45,8 +45,27 @@ export default tseslint.config(
   },
   {
     // The CLI entry points print to the console on purpose.
-    files: ['packages/database/src/cli/**/*.ts', 'packages/database/scripts/**/*.ts'],
+    files: [
+      'packages/database/src/cli/**/*.ts',
+      'packages/database/scripts/**/*.ts',
+      'apps/api/scripts/**/*.mjs',
+    ],
     rules: { 'no-console': 'off' },
+  },
+  {
+    // The scripts run in Node and use the Node globals.
+    files: ['apps/api/scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
   },
   {
     // The API relies on `emitDecoratorMetadata`: Nest resolves an injected dependency from the

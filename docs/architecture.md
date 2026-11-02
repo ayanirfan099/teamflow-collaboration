@@ -8,12 +8,16 @@ flowchart LR
   W -->|SSR / proxy /api| A[NestJS API\napps/api]
   B -->|WSS Socket.IO| A
   A -->|SQL| P[(PostgreSQL)]
-  A -->|optional cache| R[(Redis)]
   A -->|object storage adapter| S[(Local disk / S3)]
 ```
 
 The browser never talks to the database. The API is the only component that holds database
 credentials, enforces authorization and emits audit events.
+
+There is **no Redis** in v1: the sessions, the rate limit and the presence live in Postgres or
+in the memory of the API process. The trade-off and the moment a shared store becomes
+necessary are documented in [ADR 0002](./adr/0002-session-auth.md) and in
+[out-of-scope.md](./out-of-scope.md).
 
 ## 2. Repository layout
 
@@ -50,6 +54,23 @@ components. The API imports `contracts` for DTO validation and `database` for th
 | `RealtimeModule`      | Socket.IO gateway, room authorization, event fan-out.                        |
 | `HealthModule`        | Liveness and readiness probes.                                               |
 | `CommonModule`        | Error envelope, pagination, idempotency, rate limiting, request id, logging. |
+
+### 3.1.1 The attachments
+
+The upload never writes a file into the database. A `StorageDriver` interface
+(`apps/api/src/modules/attachments/storage.ts`) describes what the API needs from a store:
+
+```text
+put(key, body: Buffer, contentType) -> void
+get(key) -> { stream, size } | null
+delete(key) -> void
+```
+
+Two drivers implement it: the local one (the default in development, files in `var/uploads`)
+and the S3 one (`STORAGE_DRIVER=s3`). The key is random (a UUID plus a random suffix, sharded
+into two directories), the name of the file is stored in the row and never used to build a path. The download is authorized again and
+is sent as an attachment with `X-Content-Type-Options: nosniff`. See
+[ADR 0006](./adr/0006-attachment-storage.md).
 
 **Request pipeline**
 
@@ -131,10 +152,13 @@ another tenant's row is loaded into memory.
 
 ## 5. Ordering strategy
 
-Tasks use **fractional ordering keys** (lexicographically sortable base-62 strings). Moving a task
-between positions generates exactly one new key; no other task is rewritten, so a move is
-`O(log n)`-ish in practice and never causes a mass update. Keys are unique per column and are
-re-balanced only when the key space between two neighbours is exhausted.
+A task stores a **sparse numeric position** (`bigint`) between its neighbours. Inserting or
+moving a task computes the midpoint of the gap and writes exactly one row — the neighbours keep
+their positions, so a drag never renumbers a whole column. The stride between two neighbours is
+`1_000_000_000`; when the gap is exhausted, only the touched column is rebalanced.
+
+The details (including the meaning of `afterTaskId`) are in
+[ADR 0004](./adr/0004-fractional-ordering.md).
 
 ## 6. Real-time design
 
@@ -144,22 +168,32 @@ re-balanced only when the key space between two neighbours is exhausted.
 - Rooms: `org:<organizationId>`, `project:<projectId>`, `task:<taskId>`. Joining a room requires
   an active membership; unauthorized joins are rejected and audited.
 - Events are emitted by the API services (`task.created`, `task.updated`, `task.moved`,
-  `comment.created`, `notification.created`) and are the _same_ payloads the REST endpoints return.
+  `comment.created`, `comment.updated`, `notification.created`, `presence.updated`) and are the
+  _same_ payloads the REST endpoints return.
+- The presence is **ephemeral**: it lives in the memory of the gateway, is broadcast when a
+  client joins or leaves a task room and is never written to the database.
 - Client-side optimistic updates reconcile with the broadcast payload; a version mismatch triggers
   a rollback and a refetch.
 
 ## 7. Failure behaviour
 
-| Failure                         | Behaviour                                                                                    |
-| ------------------------------- | -------------------------------------------------------------------------------------------- |
-| Postgres unreachable            | `/ready` returns `503`; requests fail with `503 database_unavailable`; no stack traces leak. |
-| Redis unreachable (optional)    | The in-process cache/rate-limit fallback is used and a warning is logged.                    |
-| WebSocket disconnect            | The client refetches the affected queries on reconnect.                                      |
-| Optimistic-concurrency conflict | `409 conflict` with the current server representation.                                       |
+| Failure                           | Behaviour                                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------- |
+| Postgres unreachable              | `/ready` returns `503`; requests fail with `503 database_unavailable`; no stack traces leak. |
+| The storage driver is unreachable | The upload fails with `500 internal_error`; the row is not written.                          |
+| WebSocket disconnect              | The client refetches the affected queries on reconnect.                                      |
+| Optimistic-concurrency conflict   | `409 conflict` with the current server representation.                                       |
+
+The rate limiter lives in the process of the API. With more than one instance every instance
+has its own counter — the limit is therefore per instance, not global. This is documented in
+[out-of-scope.md](./out-of-scope.md) and is the reason a shared store would be needed for a
+horizontal scale.
 
 ## 8. Deployment shape
 
 `infra/` contains Dockerfiles for the API and web tier. The web tier terminates TLS and proxies
-`/api` and the WebSocket upgrade to the API tier. Postgres is managed by the operator; Redis is
-optional. See [`docs/deployment.md`](./deployment.md) for a non-production reference deployment and
-its honest limitations.
+`/api` and the WebSocket upgrade to the API tier. Postgres is managed by the operator.
+
+See [`docs/deployment.md`](./deployment.md) for the release procedure, the environment, the backup
+and the honest limitations, and [`docs/benchmarks.md`](./benchmarks.md) for the measured latency
+of the API.
