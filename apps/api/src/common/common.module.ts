@@ -9,6 +9,7 @@ import { RateLimitGuard } from './guards/rate-limit.guard';
 import { SessionGuard } from './guards/session.guard';
 import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
 import { IdempotencyService } from './idempotency/idempotency.service';
+import { AccessLogMiddleware } from './middleware/access-log.middleware';
 import { RequestContextMiddleware } from './middleware/request-context.middleware';
 import { AppLogger } from './logging/app-logger';
 import { RateLimitService } from './rate-limit/rate-limit.service';
@@ -32,6 +33,7 @@ import { RateLimitService } from './rate-limit/rate-limit.service';
     CapabilityGuard,
     RateLimitGuard,
     RequestContextMiddleware,
+    AccessLogMiddleware,
     IdempotencyInterceptor,
   ],
   exports: [
@@ -46,6 +48,7 @@ import { RateLimitService } from './rate-limit/rate-limit.service';
     CapabilityGuard,
     RateLimitGuard,
     RequestContextMiddleware,
+    AccessLogMiddleware,
     IdempotencyInterceptor,
   ],
 })

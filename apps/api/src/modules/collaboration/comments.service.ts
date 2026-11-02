@@ -145,6 +145,119 @@ export class CommentsService {
     return dto;
   }
 
+  /**
+   * Edits a comment.
+   *
+   * Only the author may edit their own comment; owners and admins may edit every comment of
+   * their organization. The mentions are resolved again, so a mention that was added by the
+   * edit notifies its recipient.
+   */
+  async update(tenant: TenantContext, commentId: string, body: string): Promise<CommentDto> {
+    const comment = await this.prisma.comment.findFirst({
+      where: { id: commentId, organizationId: tenant.organizationId, deletedAt: null },
+      include: {
+        task: { select: { id: true, title: true, projectId: true } },
+        mentions: { select: { userId: true } },
+      },
+    });
+    if (!comment) {
+      throw AppException.notFound('comment');
+    }
+    if (comment.authorId !== tenant.userId && tenant.role !== 'OWNER' && tenant.role !== 'ADMIN') {
+      throw AppException.forbidden('forbidden', 'You can only edit your own comments.');
+    }
+
+    const members = await this.prisma.membership.findMany({
+      where: { organizationId: tenant.organizationId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+    const memberList = members.map((membership) => membership.user);
+    const mentions = parseMentions(body);
+    const mentionedUserIds = resolveMentionUserIds(mentions, memberList).filter(
+      (userId) => userId !== tenant.userId,
+    );
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.mention.deleteMany({ where: { commentId: comment.id } });
+      if (mentionedUserIds.length > 0) {
+        await tx.mention.createMany({
+          data: mentionedUserIds.map((userId) => ({
+            organizationId: tenant.organizationId,
+            commentId: comment.id,
+            userId,
+          })),
+        });
+      }
+      return tx.comment.update({
+        where: { id: comment.id },
+        data: { body },
+        include: {
+          author: { select: { id: true, name: true, email: true } },
+          mentions: { include: { user: { select: { id: true, name: true, email: true } } } },
+        },
+      });
+    });
+
+    await this.activity.record({
+      organizationId: tenant.organizationId,
+      actorId: tenant.userId,
+      type: 'COMMENT_UPDATED',
+      summary: `A comment on "${comment.task.title}" was edited`,
+      projectId: comment.task.projectId,
+      taskId: comment.task.id,
+      payload: { commentId: comment.id },
+    });
+
+    const author = await this.prisma.user.findUnique({
+      where: { id: tenant.userId },
+      select: { name: true },
+    });
+
+    const previouslyMentioned = new Set(comment.mentions.map((mention) => mention.userId));
+    for (const userId of mentionedUserIds) {
+      if (previouslyMentioned.has(userId)) {
+        continue;
+      }
+      await this.notifications.notify({
+        organizationId: tenant.organizationId,
+        userId,
+        type: 'MENTION',
+        title: `${author?.name ?? 'Someone'} mentioned you`,
+        body: renderMentionMarkup(body).slice(0, 180),
+        link: `/organizations/${tenant.organizationId}/projects/${comment.task.projectId}?task=${comment.task.id}`,
+        actorId: tenant.userId,
+      });
+    }
+
+    const dto: CommentDto = {
+      id: updated.id,
+      organizationId: updated.organizationId,
+      taskId: updated.taskId,
+      body: renderMentionMarkup(updated.body),
+      authorId: updated.authorId,
+      authorName: updated.author.name,
+      authorEmail: updated.author.email,
+      mentions: updated.mentions.map((mention) => ({
+        id: mention.user.id,
+        name: mention.user.name,
+        email: mention.user.email,
+      })),
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+
+    this.realtime.emitToTask(updated.taskId, 'comment.updated', {
+      comment: dto,
+      actorId: tenant.userId,
+    });
+    this.realtime.emitToOrganization(tenant.organizationId, 'comment.updated', {
+      comment: dto,
+      actorId: tenant.userId,
+    });
+
+    return dto;
+  }
+
   async remove(tenant: TenantContext, commentId: string): Promise<void> {
     const comment = await this.prisma.comment.findFirst({
       where: { id: commentId, organizationId: tenant.organizationId, deletedAt: null },

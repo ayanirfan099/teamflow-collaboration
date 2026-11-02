@@ -93,6 +93,19 @@ export class AppException extends HttpException {
     return new AppException('payload_too_large', message, HttpStatus.PAYLOAD_TOO_LARGE);
   }
 
+  static unsupportedMediaType(message = 'The content type is not supported.', details?: unknown) {
+    return new AppException(
+      'unsupported_media_type',
+      message,
+      HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      details,
+    );
+  }
+
+  static tooManyRequests(message = 'Too many requests. Please try again later.') {
+    return new AppException('rate_limited', message, HttpStatus.TOO_MANY_REQUESTS);
+  }
+
   static internal(message = 'The request could not be completed.') {
     return new AppException('internal_error', message, HttpStatus.INTERNAL_SERVER_ERROR);
   }

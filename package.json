@@ -49,5 +49,10 @@
   },
   "optionalDependencies": {
     "@embedded-postgres/linux-x64": "17.11.0-beta.19"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.5.0"
+    }
   }
 }

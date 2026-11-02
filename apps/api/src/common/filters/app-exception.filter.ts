@@ -86,7 +86,17 @@ export class AppExceptionFilter implements ExceptionFilter {
             ? 'not_found'
             : status === HttpStatus.BAD_REQUEST
               ? 'bad_request'
-              : 'request_failed';
+              : status === HttpStatus.PAYLOAD_TOO_LARGE
+                ? 'payload_too_large'
+                : status === HttpStatus.UNSUPPORTED_MEDIA_TYPE
+                  ? 'unsupported_media_type'
+                  : status === HttpStatus.TOO_MANY_REQUESTS
+                    ? 'rate_limited'
+                    : status === HttpStatus.UNAUTHORIZED
+                      ? 'unauthenticated'
+                      : status === HttpStatus.FORBIDDEN
+                        ? 'forbidden'
+                        : 'request_failed';
       return { status, code, message: Array.isArray(message) ? message.join(', ') : message };
     }
 

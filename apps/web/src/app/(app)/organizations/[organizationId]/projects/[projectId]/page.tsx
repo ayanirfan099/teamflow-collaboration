@@ -7,6 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   EmptyState,
   ErrorState,
   Field,
@@ -16,24 +20,73 @@ import {
   Textarea,
   useToast,
 } from '@teamflow/ui';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import type { TaskDto } from '@teamflow/contracts';
 import { BoardView } from '../../../../../../components/board-view';
 import { PageHeader } from '../../../../../../components/app-shell';
 import { TaskDialog } from '../../../../../../components/task-dialog';
-import { useBoards, useColumns, useCreateTask, useProject } from '../../../../../../lib/queries';
+import {
+  EMPTY_FILTERS,
+  TaskFilterBar,
+  type TaskFilters,
+} from '../../../../../../components/task-filters';
+import {
+  useBoards,
+  useColumns,
+  useCreateTask,
+  useLabels,
+  useMembers,
+  useProject,
+  useTasks,
+  useUpdateProject,
+} from '../../../../../../lib/queries';
 
 export default function ProjectPage() {
   const params = useParams<{ organizationId: string; projectId: string }>();
   const { organizationId, projectId } = params;
+  const searchParams = useSearchParams();
 
   const project = useProject(organizationId, projectId);
   const boards = useBoards(organizationId, projectId);
   const [boardId, setBoardId] = React.useState<string | null>(null);
   const columns = useColumns(organizationId, boardId);
-  const [openTask, setOpenTask] = React.useState<TaskDto | null>(null);
+  const [openTaskId, setOpenTaskId] = React.useState<string | null>(null);
   const [creatingInColumn, setCreatingInColumn] = React.useState<string | null>(null);
+
+  // All the tasks of the project, also the completed and the archived ones. The open task is
+  // looked up in this list, so the dialog always works with the current version of the task.
+  const requestedTask = useTasks(organizationId, {
+    projectId,
+    status: 'all',
+    limit: 100,
+  });
+  const liveTask =
+    openTaskId === null
+      ? null
+      : ((requestedTask.data?.data ?? []).find((task) => task.id === openTaskId) ?? null);
+
+  // The last known version of the open task. The dialog keeps it while the list is refetched,
+  // so the dialog does not close in the middle of a comment and the draft is not lost.
+  const lastTask = React.useRef<TaskDto | null>(null);
+  React.useEffect(() => {
+    if (liveTask) {
+      lastTask.current = liveTask;
+    }
+  }, [liveTask]);
+  const openTask = liveTask ?? (openTaskId === null ? null : lastTask.current);
+
+  // A link from the search opens the task directly (`?task=<id>`).
+  const requestedTaskId = searchParams.get('task');
+  React.useEffect(() => {
+    if (!requestedTaskId) {
+      return;
+    }
+    const match = (requestedTask.data?.data ?? []).find((task) => task.id === requestedTaskId);
+    if (match) {
+      setOpenTaskId(match.id);
+    }
+  }, [requestedTaskId, requestedTask.data]);
 
   const boardList = boards.data ?? [];
   const activeBoardId = boardId ?? boardList[0]?.id ?? null;
@@ -65,20 +118,32 @@ export default function ProjectPage() {
         title={project.data?.name ?? 'Project'}
         description={project.data?.description ?? undefined}
         actions={
-          boardList.length > 1 ? (
-            <Select
-              aria-label="Select board"
-              className="w-48"
-              value={activeBoardId ?? ''}
-              onChange={(event) => setBoardId(event.target.value)}
-            >
-              {boardList.map((board) => (
-                <option key={board.id} value={board.id}>
-                  {board.name}
-                </option>
-              ))}
-            </Select>
-          ) : null
+          <>
+            {boardList.length > 1 ? (
+              <>
+                <label htmlFor="board-select" className="sr-only">
+                  Select board
+                </label>
+                <Select
+                  id="board-select"
+                  className="w-48"
+                  value={activeBoardId ?? ''}
+                  onChange={(event) => setBoardId(event.target.value)}
+                >
+                  {boardList.map((board) => (
+                    <option key={board.id} value={board.id}>
+                      {board.name}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            ) : null}
+            <ProjectMenu
+              organizationId={organizationId}
+              projectId={projectId}
+              status={project.data?.status ?? 'ACTIVE'}
+            />
+          </>
         }
       />
 
@@ -87,8 +152,9 @@ export default function ProjectPage() {
       ) : (
         <BoardSection
           organizationId={organizationId}
+          projectId={projectId}
           boardId={activeBoardId}
-          onOpenTask={setOpenTask}
+          onOpenTask={(task) => setOpenTaskId(task.id)}
           onCreateTask={(columnId) => setCreatingInColumn(columnId)}
         />
       )}
@@ -97,7 +163,7 @@ export default function ProjectPage() {
         organizationId={organizationId}
         task={openTask}
         columns={columns.data ?? []}
-        onClose={() => setOpenTask(null)}
+        onClose={() => setOpenTaskId(null)}
       />
 
       {creatingInColumn ? (
@@ -113,19 +179,92 @@ export default function ProjectPage() {
   );
 }
 
+/** The project actions: archiving a project makes it read-only. */
+function ProjectMenu({
+  organizationId,
+  projectId,
+  status,
+}: {
+  organizationId: string;
+  projectId: string;
+  status: 'ACTIVE' | 'ARCHIVED';
+}) {
+  const updateProject = useUpdateProject(organizationId);
+  const { toast } = useToast();
+
+  async function setStatus(next: 'ACTIVE' | 'ARCHIVED') {
+    try {
+      await updateProject.mutateAsync({ projectId, body: { status: next } });
+      toast({
+        title: next === 'ARCHIVED' ? 'Project archived' : 'Project restored',
+        tone: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'The project could not be updated',
+        description: error instanceof Error ? error.message : undefined,
+        tone: 'error',
+      });
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="rounded-lg border border-line bg-surface-raised px-3 py-2 text-sm font-medium hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          aria-label="Project actions"
+        >
+          Actions
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {status === 'ACTIVE' ? (
+          <DropdownMenuItem
+            onSelect={() => void setStatus('ARCHIVED')}
+            disabled={updateProject.isPending}
+          >
+            Archive project
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            onSelect={() => void setStatus('ACTIVE')}
+            disabled={updateProject.isPending}
+          >
+            Restore project
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function BoardSection({
   organizationId,
+  projectId,
   boardId,
   onOpenTask,
   onCreateTask,
 }: {
   organizationId: string;
+  projectId: string;
   boardId: string;
   onOpenTask: (task: TaskDto) => void;
   onCreateTask: (columnId: string) => void;
 }) {
   const columns = useColumns(organizationId, boardId);
+  const members = useMembers(organizationId);
+  const labels = useLabels(organizationId);
   const [view, setView] = React.useState<'board' | 'list'>('board');
+  const [filters, setFilters] = React.useState<TaskFilters>(EMPTY_FILTERS);
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+
+  // The search field is debounced, so a request is not sent per keystroke.
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(filters.q.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [filters.q]);
 
   if (columns.isLoading) {
     return <Skeleton className="h-64" />;
@@ -141,7 +280,7 @@ function BoardSection({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-end gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
         <div
           role="group"
           aria-label="View mode"
@@ -163,6 +302,13 @@ function BoardSection({
         </div>
       </div>
 
+      <TaskFilterBar
+        filters={filters}
+        onChange={setFilters}
+        members={members.data ?? []}
+        labels={labels.data ?? []}
+      />
+
       <BoardView
         organizationId={organizationId}
         boardId={boardId}
@@ -170,7 +316,20 @@ function BoardSection({
         onOpenTask={onOpenTask}
         onCreateTask={onCreateTask}
         view={view}
+        filters={{
+          q: debouncedSearch || undefined,
+          assigneeId: filters.assigneeId || undefined,
+          labelIds: filters.labelIds.length > 0 ? filters.labelIds : undefined,
+          priority: filters.priority.length > 0 ? filters.priority : undefined,
+          due: filters.due || undefined,
+          status: filters.status,
+        }}
       />
+
+      <p className="sr-only" aria-live="polite">
+        {filters.q ? `Filtered by ${filters.q}.` : 'Showing all tasks.'}
+      </p>
+      <span className="sr-only">{projectId}</span>
     </div>
   );
 }

@@ -3,9 +3,10 @@
 import { Avatar, Button, Textarea, useToast } from '@teamflow/ui';
 import * as React from 'react';
 import type { MemberDto } from '@teamflow/contracts';
-import { buildMention } from '@teamflow/contracts';
-import { useComments, useCreateComment } from '../lib/queries';
+import { encodeMentions, renderMentionMarkup } from '@teamflow/contracts';
+import { useComments, useCreateComment, useDeleteComment, useUpdateComment } from '../lib/queries';
 import { formatRelative } from '../lib/format';
+import { useSession } from '../lib/session';
 
 export interface CommentThreadProps {
   organizationId: string;
@@ -13,13 +14,16 @@ export interface CommentThreadProps {
   members: MemberDto[];
 }
 
-/** The comments of a task, including the mention picker. */
+/** The comments of a task, including the mention picker and the edit mode. */
 export function CommentThread({ organizationId, taskId, members }: CommentThreadProps) {
   const { data, isLoading } = useComments(organizationId, taskId);
   const createComment = useCreateComment(organizationId, taskId);
   const { toast } = useToast();
 
   const [body, setBody] = React.useState('');
+  // The draft is also kept in a ref, so the box is only cleared when it still holds the
+  // comment that was sent. A comment that is written while the request is running is kept.
+  const draft = React.useRef('');
   const [showMentions, setShowMentions] = React.useState(false);
 
   const comments = data ?? [];
@@ -31,9 +35,13 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
       return;
     }
     try {
-      await createComment.mutateAsync(trimmed);
-      setBody('');
-      setShowMentions(false);
+      // A mention that was typed by hand is encoded here as well, so "@Ada" notifies Ada.
+      await createComment.mutateAsync(encodeMentions(trimmed, members));
+      if (draft.current.trim() === trimmed) {
+        draft.current = '';
+        setBody('');
+        setShowMentions(false);
+      }
     } catch (error) {
       toast({
         title: 'The comment could not be saved',
@@ -44,7 +52,10 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
   }
 
   function insertMention(member: MemberDto) {
-    setBody((current) => `${current}${buildMention(member.name, member.userId)} `);
+    // The readable name is inserted; the markup is added when the comment is sent.
+    const next = `${draft.current}@${member.name} `;
+    draft.current = next;
+    setBody(next);
     setShowMentions(false);
   }
 
@@ -63,28 +74,29 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
       ) : (
         <ul className="flex flex-col gap-3">
           {comments.map((comment) => (
-            <li key={comment.id} className="flex gap-2">
-              <Avatar name={comment.authorName} size="sm" />
-              <div className="min-w-0 flex-1 rounded-lg bg-surface-sunken/70 px-3 py-2">
-                <p className="text-xs font-medium text-ink">
-                  {comment.authorName}{' '}
-                  <span className="font-normal text-ink-faint">
-                    {formatRelative(comment.createdAt)}
-                  </span>
-                </p>
-                <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{comment.body}</p>
-              </div>
-            </li>
+            <CommentItem
+              key={comment.id}
+              organizationId={organizationId}
+              taskId={taskId}
+              comment={comment}
+              members={members}
+            />
           ))}
         </ul>
       )}
 
       <form onSubmit={submit} className="flex flex-col gap-2">
+        <label htmlFor="comment-body" className="sr-only">
+          Write a comment
+        </label>
         <Textarea
           id="comment-body"
           value={body}
           placeholder="Write a comment — use @ to mention a teammate"
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => {
+            draft.current = event.target.value;
+            setBody(event.target.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === '@') {
               setShowMentions(true);
@@ -112,5 +124,150 @@ export function CommentThread({ organizationId, taskId, members }: CommentThread
         </div>
       </form>
     </section>
+  );
+}
+
+interface CommentItemProps {
+  organizationId: string;
+  taskId: string;
+  members: MemberDto[];
+  comment: {
+    id: string;
+    body: string;
+    authorId: string;
+    authorName: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+/**
+ * A single comment.
+ *
+ * The author (and owners and admins) can edit their own comment; the edit is a plain text
+ * field, so it works with the keyboard alone.
+ */
+function CommentItem({ organizationId, taskId, comment, members }: CommentItemProps) {
+  const { session, activeMembership } = useSession();
+  const updateComment = useUpdateComment(organizationId, taskId);
+  const deleteComment = useDeleteComment(organizationId, taskId);
+  const { toast } = useToast();
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(() => renderMentionMarkup(comment.body));
+
+  const isAuthor = session?.user.id === comment.authorId;
+  const isModerator = activeMembership?.role === 'OWNER' || activeMembership?.role === 'ADMIN';
+  const canEdit = isAuthor || isModerator;
+  const wasEdited = comment.updatedAt !== comment.createdAt;
+
+  React.useEffect(() => {
+    setDraft(renderMentionMarkup(comment.body));
+  }, [comment.body]);
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      return;
+    }
+    try {
+      // The editor shows the readable form, the API stores the mention markup.
+      const body = encodeMentions(trimmed, members);
+      await updateComment.mutateAsync({ commentId: comment.id, body });
+      setEditing(false);
+      toast({ title: 'Comment updated', tone: 'success' });
+    } catch (error) {
+      toast({
+        title: 'The comment could not be updated',
+        description: error instanceof Error ? error.message : undefined,
+        tone: 'error',
+      });
+    }
+  }
+
+  async function remove() {
+    try {
+      await deleteComment.mutateAsync(comment.id);
+      toast({ title: 'Comment deleted', tone: 'success' });
+    } catch (error) {
+      toast({
+        title: 'The comment could not be deleted',
+        description: error instanceof Error ? error.message : undefined,
+        tone: 'error',
+      });
+    }
+  }
+
+  return (
+    <li className="flex gap-2">
+      <Avatar name={comment.authorName} size="sm" />
+      <div className="min-w-0 flex-1 rounded-lg bg-surface-sunken/70 px-3 py-2">
+        <p className="text-xs font-medium text-ink">
+          {comment.authorName}{' '}
+          <span className="font-normal text-ink-faint">
+            {formatRelative(comment.createdAt)}
+            {wasEdited ? ' · edited' : ''}
+          </span>
+        </p>
+
+        {editing ? (
+          <form onSubmit={save} className="mt-1 flex flex-col gap-2">
+            <label htmlFor={`edit-comment-${comment.id}`} className="sr-only">
+              Edit your comment
+            </label>
+            <Textarea
+              id={`edit-comment-${comment.id}`}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+            <div className="flex items-center gap-2">
+              <Button type="submit" size="sm" loading={updateComment.isPending}>
+                Save
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setDraft(renderMentionMarkup(comment.body));
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">
+            {renderMentionMarkup(comment.body)}
+          </p>
+        )}
+
+        {canEdit && !editing ? (
+          <div className="mt-1 flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setDraft(renderMentionMarkup(comment.body));
+                setEditing(true);
+              }}
+            >
+              Edit
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              loading={deleteComment.isPending && deleteComment.variables === comment.id}
+              onClick={() => void remove()}
+            >
+              Delete
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </li>
   );
 }

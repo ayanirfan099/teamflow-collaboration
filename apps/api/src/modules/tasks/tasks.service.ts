@@ -22,7 +22,7 @@ export interface TaskDto {
   number: number;
   title: string;
   description: string | null;
-  status: 'OPEN' | 'DONE';
+  status: 'OPEN' | 'DONE' | 'ARCHIVED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate: string | null;
   completedAt: string | null;
@@ -49,7 +49,7 @@ export interface TaskQuery {
   labelIds?: string[];
   priority?: TaskPriority[];
   due?: 'overdue' | 'today' | 'week' | 'none';
-  status: 'open' | 'done' | 'all';
+  status: 'open' | 'done' | 'archived' | 'all';
   limit?: number;
   cursor?: string;
 }
@@ -78,43 +78,63 @@ export class TasksService {
 
     const cursor = query.cursor ? this.decodeCursor(query.cursor) : null;
 
-    const where: Prisma.TaskWhereInput = {
-      organizationId: tenant.organizationId,
-      ...(query.boardId ? { boardId: query.boardId } : {}),
-      ...(query.projectId ? { projectId: query.projectId } : {}),
-      ...(query.columnId ? { columnId: query.columnId } : {}),
-      ...(query.status === 'all' ? {} : { status: query.status === 'done' ? 'DONE' : 'OPEN' }),
-      ...(query.assigneeId ? { assignees: { some: { userId: query.assigneeId } } } : {}),
-      ...(query.labelIds && query.labelIds.length > 0
-        ? { labels: { some: { labelId: { in: query.labelIds } } } }
-        : {}),
-      ...(query.priority && query.priority.length > 0 ? { priority: { in: query.priority } } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { title: { contains: query.q, mode: 'insensitive' } },
-              { description: { contains: query.q, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-      ...(query.due === 'overdue'
-        ? { dueDate: { lt: now } }
-        : query.due === 'today'
-          ? { dueDate: { gte: now, lte: endOfToday } }
-          : query.due === 'week'
-            ? { dueDate: { gte: now, lte: endOfWeek } }
-            : query.due === 'none'
-              ? { dueDate: null }
-              : {}),
-      ...(cursor
-        ? {
-            OR: [
-              { position: { gt: BigInt(cursor.position) } },
-              { position: BigInt(cursor.position), id: { gt: cursor.id ?? '' } },
-            ],
-          }
-        : {}),
-    };
+    // The search term and the cursor are combined with `AND`, so a page of a search result
+    // does not lose the search filter.
+    const conditions: Prisma.TaskWhereInput[] = [];
+    const add = (condition: Prisma.TaskWhereInput) => conditions.push(condition);
+
+    add({ organizationId: tenant.organizationId });
+    if (query.boardId) {
+      add({ boardId: query.boardId });
+    }
+    if (query.projectId) {
+      add({ projectId: query.projectId });
+    }
+    if (query.columnId) {
+      add({ columnId: query.columnId });
+    }
+    if (query.status !== 'all') {
+      add({
+        status:
+          query.status === 'done' ? 'DONE' : query.status === 'archived' ? 'ARCHIVED' : 'OPEN',
+      });
+    }
+    if (query.assigneeId) {
+      add({ assignees: { some: { userId: query.assigneeId } } });
+    }
+    if (query.labelIds && query.labelIds.length > 0) {
+      add({ labels: { some: { labelId: { in: query.labelIds } } } });
+    }
+    if (query.priority && query.priority.length > 0) {
+      add({ priority: { in: query.priority } });
+    }
+    if (query.q) {
+      add({
+        OR: [
+          { title: { contains: query.q, mode: 'insensitive' } },
+          { description: { contains: query.q, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (query.due === 'overdue') {
+      add({ dueDate: { lt: now } });
+    } else if (query.due === 'today') {
+      add({ dueDate: { gte: now, lte: endOfToday } });
+    } else if (query.due === 'week') {
+      add({ dueDate: { gte: now, lte: endOfWeek } });
+    } else if (query.due === 'none') {
+      add({ dueDate: null });
+    }
+    if (cursor) {
+      add({
+        OR: [
+          { position: { gt: BigInt(cursor.position) } },
+          { position: BigInt(cursor.position), id: { gt: cursor.id ?? '' } },
+        ],
+      });
+    }
+
+    const where: Prisma.TaskWhereInput = { AND: conditions };
 
     const tasks = await this.prisma.task.findMany({
       where,
@@ -293,7 +313,8 @@ export class TasksService {
       input.labelIds === undefined ? undefined : await this.assertLabels(tenant, input.labelIds);
 
     const completing = input.status === 'DONE' && current.status !== 'DONE';
-    const reopening = input.status === 'OPEN' && current.status === 'DONE';
+    const reopening = input.status === 'OPEN' && current.status !== 'OPEN';
+    const archiving = input.status === 'ARCHIVED' && current.status !== 'ARCHIVED';
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (assigneeIds !== undefined) {
@@ -338,12 +359,20 @@ export class TasksService {
     await this.activity.record({
       organizationId: tenant.organizationId,
       actorId: tenant.userId,
-      type: completing ? 'TASK_COMPLETED' : reopening ? 'TASK_REOPENED' : 'TASK_UPDATED',
-      summary: completing
-        ? `${author?.name ?? 'Someone'} completed "${updated.title}"`
-        : reopening
-          ? `${author?.name ?? 'Someone'} reopened "${updated.title}"`
-          : `${author?.name ?? 'Someone'} updated "${updated.title}"`,
+      type: archiving
+        ? 'TASK_ARCHIVED'
+        : completing
+          ? 'TASK_COMPLETED'
+          : reopening
+            ? 'TASK_REOPENED'
+            : 'TASK_UPDATED',
+      summary: archiving
+        ? `${author?.name ?? 'Someone'} archived "${updated.title}"`
+        : completing
+          ? `${author?.name ?? 'Someone'} completed "${updated.title}"`
+          : reopening
+            ? `${author?.name ?? 'Someone'} reopened "${updated.title}"`
+            : `${author?.name ?? 'Someone'} updated "${updated.title}"`,
       projectId: updated.projectId,
       taskId: updated.id,
     });
@@ -625,7 +654,7 @@ export class TasksService {
     number: number;
     title: string;
     description: string | null;
-    status: 'OPEN' | 'DONE';
+    status: 'OPEN' | 'DONE' | 'ARCHIVED';
     priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
     dueDate: Date | null;
     completedAt: Date | null;

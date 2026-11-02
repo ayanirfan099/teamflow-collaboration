@@ -16,7 +16,7 @@ interface InvitationPreview {
 export default function AcceptInvitationPage() {
   const params = useParams<{ token: string }>();
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useSession();
+  const { isAuthenticated, isLoading, refresh } = useSession();
   const [invitation, setInvitation] = React.useState<InvitationPreview | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -46,8 +46,9 @@ export default function AcceptInvitationPage() {
     setError(null);
     try {
       await apiSend('/invitations/accept', 'POST', { token: params.token });
+      // The new membership has to be known before the workspace can be shown.
+      await refresh();
       router.push('/my-work');
-      router.refresh();
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);

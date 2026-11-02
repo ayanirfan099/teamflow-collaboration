@@ -35,6 +35,7 @@ enum TaskPriority {
 enum TaskStatus {
   OPEN
   DONE
+  ARCHIVED
 }
 
 enum ActivityType {
@@ -45,8 +46,10 @@ enum ActivityType {
   TASK_MOVED
   TASK_COMPLETED
   TASK_REOPENED
+  TASK_ARCHIVED
   TASK_DELETED
   COMMENT_CREATED
+  COMMENT_UPDATED
   COMMENT_DELETED
   ATTACHMENT_ADDED
   MEMBER_JOINED

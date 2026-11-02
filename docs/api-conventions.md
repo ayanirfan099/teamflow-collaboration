@@ -84,15 +84,18 @@ opaque, URL-safe base64 strings; clients must not parse them.
 
 List endpoints accept a documented subset of query parameters, e.g.:
 
-| Parameter         | Type    | Notes                                                              |
-| ----------------- | ------- | ------------------------------------------------------------------ |
-| `q`               | string  | Free-text search over title and description (trigram/token match). |
-| `assigneeId`      | uuid    | Exact assignee filter.                                             |
-| `labelIds`        | csv     | Comma-separated label ids (AND semantics).                         |
-| `priority`        | csv     | `low`, `medium`, `high`, `urgent`.                                 |
-| `due`             | string  | `overdue`, `today`, `week`, `none`.                                |
-| `status`          | string  | `open`, `done`, `all`.                                             |
-| `includeArchived` | boolean | Default `false`.                                                   |
+| Parameter    | Type   | Notes                                                                 |
+| ------------ | ------ | --------------------------------------------------------------------- |
+| `q`          | string | Case-insensitive search over the title and the description.           |
+| `assigneeId` | uuid   | Exact assignee filter.                                                |
+| `labelIds`   | list   | Label ids — repeatable (`?labelIds=a&labelIds=b`) or comma separated. |
+| `priority`   | list   | `LOW`, `MEDIUM`, `HIGH`, `URGENT`.                                    |
+| `due`        | string | `overdue`, `today`, `week`, `none`.                                   |
+| `status`     | string | `open` (default), `done`, `archived`, `all`.                          |
+
+The search is a `contains` match (`ILIKE '%term%'`), so a pattern with a leading wildcard
+cannot use a b-tree index. The page size (`limit`, at most 100) keeps the result small; a
+trigram index would be the next step for very large projects.
 
 Unknown query parameters are ignored rather than rejected, to keep clients forward compatible.
 
@@ -116,14 +119,17 @@ payload returns `409 duplicate`.
 
 ## 9. Rate limiting
 
-| Scope                        | Limit (default)                                    |
-| ---------------------------- | -------------------------------------------------- |
-| `POST /auth/login`           | 10 requests / 5 min / IP, and 5 / 15 min / account |
-| `POST /auth/register`        | 5 / hour / IP                                      |
-| `POST /invitations` (accept) | 20 / hour / IP                                     |
-| `POST /attachments`          | 60 / hour / user                                   |
+| Endpoint                              | Limit (default)    | Scope          |
+| ------------------------------------- | ------------------ | -------------- |
+| `POST /auth/login`                    | 10 requests / hour | IP and address |
+| `POST /auth/register`                 | 10 requests / hour | IP and address |
+| `POST /organizations/:id/invitations` | 20 requests / hour | user           |
+| `POST /invitations/accept`            | 20 requests / hour | user           |
 
-Responses include `Retry-After`. Limits are configurable per environment.
+A rejected request answers with `429`, the code `rate_limited` and the `retry-after` header.
+The limiter is a fixed window counter in the process; it is switched off with
+`RATE_LIMIT_ENABLED=false` (it is off in the test environment) and the window can be changed
+with `RATE_LIMIT_WINDOW_SECONDS`.
 
 ## 10. Real-time protocol
 
@@ -138,10 +144,33 @@ Socket.IO namespace `/realtime`. The client passes the session cookie during the
 | ←         | `task.updated`               | Task payload                                          |
 | ←         | `task.moved`                 | `{ taskId, columnId, position, version }`             |
 | ←         | `comment.created`            | Comment payload                                       |
+| ←         | `comment.updated`            | Comment payload                                       |
 | ←         | `notification.created`       | Notification payload                                  |
 | ←         | `presence.updated`           | `{ userId, room, online }` — ephemeral, not persisted |
 
-## 11. OpenAPI
+The presence is not stored: it lives in the memory of the gateway and disappears with the
+connection. `GET /api/v1/organizations/:organizationId/tasks/:taskId/presence` returns the
+members that are currently looking at a task.
+
+## 11. Attachments
+
+| Method   | Path                                                                       | Notes                                       |
+| -------- | -------------------------------------------------------------------------- | ------------------------------------------- |
+| `GET`    | `/api/v1/organizations/:organizationId/tasks/:taskId/attachments`          | the files of a task                         |
+| `POST`   | `/api/v1/organizations/:organizationId/tasks/:taskId/attachments`          | `multipart/form-data`, field `file`         |
+| `GET`    | `/api/v1/organizations/:organizationId/attachments/:attachmentId/download` | the file, `Content-Disposition: attachment` |
+| `DELETE` | `/api/v1/organizations/:organizationId/attachments/:attachmentId`          | removes the file and the row                |
+| `GET`    | `/api/v1/organizations/:organizationId/attachments/types`                  | the allowed file types and the limit        |
+
+- The upload is limited to 10 MiB (`413 payload_too_large`) and to the types of the
+  allowlist (`415 unsupported_media_type`). The type is checked against the content of the
+  file, not only against the header.
+- The storage key is random; the name of the file is stored separately and is never used to
+  build a path.
+- The download checks the permission of the caller again and answers with
+  `X-Content-Type-Options: nosniff`. The file is never served inline.
+
+## 12. OpenAPI
 
 The API exposes a generated OpenAPI 3.1 document at `/api/v1/docs` and the raw JSON at
 `/api/v1/openapi.json`. The document is produced from the same Zod contracts the API validates

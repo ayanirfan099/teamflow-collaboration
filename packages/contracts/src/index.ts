@@ -4,5 +4,6 @@ export * from './auth';
 export * from './projects';
 export * from './tasks';
 export * from './collaboration';
+export * from './attachments';
 export * from './realtime';
 export * from './mentions';

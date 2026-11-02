@@ -23,9 +23,19 @@ interface SocketUser {
 interface SocketState {
   user?: SocketUser;
   sessionId?: string;
+  /** The rooms the socket has joined, so the presence can be cleaned up on disconnect. */
+  rooms?: Set<string>;
 }
 
 const ROOM_PATTERN = /^(org|project|task):([0-9a-fA-F-]{36})$/;
+
+/** A person who is currently looking at a task. */
+export interface PresenceEntry {
+  userId: string;
+  name: string;
+  /** The moment the person opened the task. */
+  since: string;
+}
 
 /**
  * The authenticated real-time gateway.
@@ -44,6 +54,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private server?: Server;
 
   private readonly logger = new Logger(RealtimeGateway.name);
+
+  /**
+   * The ephemeral presence.
+   *
+   * Presence lives in memory only: it disappears when the process restarts and it is never
+   * written to the activity feed or to the audit log. A task is identified by the set of the
+   * sockets that are watching it.
+   */
+  private readonly presence = new Map<string, Map<string, { name: string; since: Date }>>();
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -66,6 +85,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const state = client.data as SocketState;
     state.user = { id: session.user.id, name: session.user.name, email: session.user.email };
     state.sessionId = session.id;
+    state.rooms = new Set<string>();
 
     // Every organization the user belongs to is joined automatically; project and task rooms
     // have to be requested explicitly and are authorised on join.
@@ -86,6 +106,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const state = client.data as SocketState;
     if (state.user) {
       this.logger.debug(`socket ${client.id} disconnected`);
+      for (const room of state.rooms ?? []) {
+        this.removeFromPresence(room, state.user.id);
+      }
     }
   }
 
@@ -122,6 +145,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     await client.join(room!);
+    state.rooms ??= new Set<string>();
+    state.rooms.add(room!);
+
+    if (kind === 'task') {
+      this.addToPresence(room!, state.user.id, state.user.name);
+    }
+
     client.emit('room:joined', { room });
     return { room: room! };
   }
@@ -134,8 +164,63 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const room = typeof payload?.room === 'string' ? payload.room : '';
     if (ROOM_PATTERN.test(room)) {
       await client.leave(room);
+      const state = client.data as SocketState;
+      state.rooms?.delete(room);
+      if (state.user && room.startsWith('task:')) {
+        this.removeFromPresence(room, state.user.id);
+      }
     }
     return { room };
+  }
+
+  /**
+   * The people that are currently looking at a task.
+   *
+   * The list is ephemeral — it is never persisted and never audited.
+   */
+  presenceOf(taskId: string): PresenceEntry[] {
+    const viewers = this.presence.get(`task:${taskId}`);
+    if (!viewers) {
+      return [];
+    }
+    return [...viewers.entries()].map(([userId, viewer]) => ({
+      userId,
+      name: viewer.name,
+      since: viewer.since.toISOString(),
+    }));
+  }
+
+  private addToPresence(room: string, userId: string, name: string): void {
+    const viewers = this.presence.get(room) ?? new Map<string, { name: string; since: Date }>();
+    if (!viewers.has(userId)) {
+      viewers.set(userId, { name, since: new Date() });
+    }
+    this.presence.set(room, viewers);
+    this.broadcastPresence(room);
+  }
+
+  private removeFromPresence(room: string, userId: string): void {
+    const viewers = this.presence.get(room);
+    if (!viewers) {
+      return;
+    }
+    viewers.delete(userId);
+    if (viewers.size === 0) {
+      this.presence.delete(room);
+    }
+    this.broadcastPresence(room);
+  }
+
+  /** Sends the current presence of a room to everybody in it. */
+  private broadcastPresence(room: string): void {
+    const taskId = room.startsWith('task:') ? room.slice('task:'.length) : null;
+    if (!taskId) {
+      return;
+    }
+    this.server?.to(room).emit('presence.updated', {
+      taskId,
+      viewers: this.presenceOf(taskId),
+    });
   }
 
   /** Emits an event to every member of an organization. */

@@ -17,7 +17,8 @@ import {
 } from '@teamflow/ui';
 import * as React from 'react';
 import type { ColumnDto, TaskDto } from '@teamflow/contracts';
-import { useMembers, useUpdateTask } from '../lib/queries';
+import { useMembers, usePresence, useUpdateTask } from '../lib/queries';
+import { AttachmentsPanel } from './attachments-panel';
 import { CommentThread } from './comment-thread';
 
 export interface TaskDialogProps {
@@ -27,7 +28,7 @@ export interface TaskDialogProps {
   onClose: () => void;
 }
 
-/** The detail view of a task: fields, assignees and comments. */
+/** The detail view of a task: fields, assignees, attachments and comments. */
 export function TaskDialog({ organizationId, task, columns, onClose }: TaskDialogProps) {
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -36,6 +37,7 @@ export function TaskDialog({ organizationId, task, columns, onClose }: TaskDialo
   const [assigneeIds, setAssigneeIds] = React.useState<string[]>([]);
   const updateTask = useUpdateTask(organizationId);
   const { data: members } = useMembers(organizationId);
+  const { data: presence } = usePresence(organizationId, task?.id ?? null);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -81,6 +83,33 @@ export function TaskDialog({ organizationId, task, columns, onClose }: TaskDialo
     }
   }
 
+  /** Completes, reopens or archives the task. */
+  async function changeStatus(status: 'OPEN' | 'DONE' | 'ARCHIVED') {
+    if (!task) {
+      return;
+    }
+    try {
+      await updateTask.mutateAsync({ taskId: task.id, body: { status, version: task.version } });
+      toast({
+        title:
+          status === 'DONE'
+            ? 'Task completed'
+            : status === 'ARCHIVED'
+              ? 'Task archived'
+              : 'Task reopened',
+        tone: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'The task could not be updated',
+        description: error instanceof Error ? error.message : undefined,
+        tone: 'error',
+      });
+    }
+  }
+
+  const viewers = presence ?? [];
+
   return (
     <Dialog open={Boolean(task)} onOpenChange={(open) => (open ? undefined : onClose())}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -88,8 +117,18 @@ export function TaskDialog({ organizationId, task, columns, onClose }: TaskDialo
           <DialogTitle>{task.title}</DialogTitle>
           <DialogDescription>
             Task #{task.number} · {columns.find((column) => column.id === task.columnId)?.name}
+            {task.status === 'DONE' ? ' · Completed' : ''}
+            {task.status === 'ARCHIVED' ? ' · Archived' : ''}
           </DialogDescription>
         </DialogHeader>
+
+        {viewers.length > 0 ? (
+          <p className="mb-3 rounded-lg border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted">
+            <span className="font-medium text-ink">Open right now:</span>{' '}
+            {viewers.map((viewer) => viewer.name).join(', ')}
+            <span className="block text-ink-faint">Presence is live and never stored.</span>
+          </p>
+        ) : null}
 
         <form onSubmit={save} className="flex flex-col gap-4">
           <Field label="Title" htmlFor="task-title">
@@ -171,6 +210,21 @@ export function TaskDialog({ organizationId, task, columns, onClose }: TaskDialo
           </div>
 
           <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void changeStatus(task.status === 'DONE' ? 'OPEN' : 'DONE')}
+              disabled={task.status === 'ARCHIVED'}
+            >
+              {task.status === 'DONE' ? 'Reopen task' : 'Mark as completed'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void changeStatus(task.status === 'ARCHIVED' ? 'OPEN' : 'ARCHIVED')}
+            >
+              {task.status === 'ARCHIVED' ? 'Restore task' : 'Archive task'}
+            </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
               Close
             </Button>
@@ -179,6 +233,10 @@ export function TaskDialog({ organizationId, task, columns, onClose }: TaskDialo
             </Button>
           </DialogFooter>
         </form>
+
+        <div className="mt-6 border-t border-line pt-4">
+          <AttachmentsPanel organizationId={organizationId} taskId={task.id} />
+        </div>
 
         <div className="mt-6 border-t border-line pt-4">
           <CommentThread organizationId={organizationId} taskId={task.id} members={members ?? []} />

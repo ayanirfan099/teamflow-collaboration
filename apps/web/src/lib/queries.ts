@@ -1,8 +1,9 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiSend, type Envelope } from './api';
+import { apiGet, apiSend, apiUpload, type Envelope } from './api';
 import type {
+  AttachmentDto,
   BoardDto,
   ColumnDto,
   LabelDto,
@@ -10,6 +11,7 @@ import type {
   NotificationDto,
   OrganizationDto,
   ProjectDto,
+  SessionDto,
   TaskDto,
 } from '@teamflow/contracts';
 
@@ -75,7 +77,11 @@ export interface TaskListQuery {
   projectId?: string;
   columnId?: string;
   q?: string;
-  status?: 'open' | 'done' | 'all';
+  assigneeId?: string;
+  labelIds?: string[];
+  priority?: string[];
+  due?: 'overdue' | 'today' | 'week' | 'none';
+  status?: 'open' | 'done' | 'archived' | 'all';
   limit?: number;
   cursor?: string;
 }
@@ -91,6 +97,10 @@ export function useTasks(organizationId: string | null, query: TaskListQuery) {
           projectId: query.projectId,
           columnId: query.columnId,
           q: query.q,
+          assigneeId: query.assigneeId,
+          labelIds: query.labelIds,
+          priority: query.priority,
+          due: query.due,
           status: query.status,
           limit: query.limit,
           cursor: query.cursor,
@@ -112,10 +122,19 @@ export function useTask(organizationId: string | null, taskId: string | null) {
   });
 }
 
+/**
+ * The members of the workspace.
+ *
+ * The list is short, but it changes: a teammate can join while the board is open. The query is
+ * therefore refetched whenever a component that needs the list is mounted, so the mention
+ * picker and the assignee filter know the current members.
+ */
 export function useMembers(organizationId: string | null) {
   return useQuery({
     queryKey: ['members', organizationId],
     enabled: Boolean(organizationId),
+    staleTime: 5_000,
+    refetchOnMount: 'always',
     queryFn: async () => {
       const response = await apiGet<MemberDto[]>(`/organizations/${organizationId}/members`);
       return response.data;
@@ -138,7 +157,9 @@ export function useNotifications(organizationId: string | null) {
   return useQuery({
     queryKey: ['notifications', organizationId],
     enabled: Boolean(organizationId),
-    refetchInterval: 60_000,
+    // The live connection refreshes the list as soon as a notification arrives. The interval
+    // is the fallback for a client whose socket is not connected.
+    refetchInterval: 15_000,
     queryFn: async () => {
       const response = await apiGet<NotificationDto[]>(
         `/organizations/${organizationId}/notifications`,
@@ -394,6 +415,229 @@ export function useOrganizations() {
     queryFn: async () => {
       const response = await apiGet<OrganizationDto[]>('/organizations');
       return response.data;
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ attachments */
+
+/** The attachments of a task. */
+export function useAttachments(organizationId: string | null, taskId: string | null) {
+  return useQuery({
+    queryKey: ['attachments', organizationId, taskId],
+    enabled: Boolean(organizationId && taskId),
+    queryFn: async () => {
+      const response = await apiGet<AttachmentDto[]>(
+        `/organizations/${organizationId}/tasks/${taskId}/attachments`,
+      );
+      return response.data;
+    },
+  });
+}
+
+/** Uploads a file to a task. */
+export function useUploadAttachment(organizationId: string | null, taskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const response = await apiUpload<AttachmentDto>(
+        `/organizations/${organizationId}/tasks/${taskId}/attachments`,
+        file,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['attachments', organizationId, taskId] });
+      void queryClient.invalidateQueries({ queryKey: ['activity', organizationId] });
+    },
+  });
+}
+
+/** Removes an attachment. */
+export function useDeleteAttachment(organizationId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (attachmentId: string) => {
+      await apiSend(`/organizations/${organizationId}/attachments/${attachmentId}`, 'DELETE');
+      return attachmentId;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['attachments', organizationId] });
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ comments */
+
+/** Edits a comment. */
+export function useUpdateComment(organizationId: string | null, taskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { commentId: string; body: string }) => {
+      const response = await apiSend<CommentDto>(
+        `/organizations/${organizationId}/comments/${input.commentId}`,
+        'PATCH',
+        { body: input.body },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['comments', organizationId, taskId] });
+      void queryClient.invalidateQueries({ queryKey: ['activity', organizationId] });
+    },
+  });
+}
+
+/** Deletes a comment. */
+export function useDeleteComment(organizationId: string | null, taskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      await apiSend(`/organizations/${organizationId}/comments/${commentId}`, 'DELETE');
+      return commentId;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['comments', organizationId, taskId] });
+      void queryClient.invalidateQueries({ queryKey: ['activity', organizationId] });
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ presence */
+
+export interface PresenceEntry {
+  userId: string;
+  name: string;
+  since: string;
+}
+
+/** The ephemeral presence of a task. It is never persisted and never audited. */
+export function usePresence(organizationId: string | null, taskId: string | null) {
+  return useQuery({
+    queryKey: ['presence', organizationId, taskId],
+    enabled: Boolean(organizationId && taskId),
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const response = await apiGet<PresenceEntry[]>(
+        `/organizations/${organizationId}/tasks/${taskId}/presence`,
+      );
+      return response.data;
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ members */
+
+/** Changes the role of a member. */
+export function useUpdateMemberRole(organizationId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { membershipId: string; role: 'ADMIN' | 'MEMBER' | 'VIEWER' }) => {
+      const response = await apiSend<MemberDto>(
+        `/organizations/${organizationId}/members/${input.membershipId}`,
+        'PATCH',
+        { role: input.role },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['members', organizationId] });
+    },
+  });
+}
+
+/** Removes a member from the organization. */
+export function useRemoveMember(organizationId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (membershipId: string) => {
+      await apiSend(`/organizations/${organizationId}/members/${membershipId}`, 'DELETE');
+      return membershipId;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['members', organizationId] });
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ audit log */
+
+export interface AuditEventDto {
+  id: string;
+  organizationId: string;
+  actorId: string | null;
+  actorName: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  metadata: Record<string, unknown> | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+/** The audit log. Only owners and admins may read it. */
+export function useAuditEvents(organizationId: string | null) {
+  return useQuery({
+    queryKey: ['audit', organizationId],
+    enabled: Boolean(organizationId),
+    queryFn: async () => {
+      const response = await apiGet<AuditEventDto[]>(`/organizations/${organizationId}/audit`, {
+        query: { limit: 50 },
+      });
+      return response.data;
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ sessions */
+
+/** The active sessions of the current user. */
+export function useSessions() {
+  return useQuery({
+    queryKey: ['sessions'],
+    queryFn: async () => {
+      const response = await apiGet<SessionDto[]>('/auth/sessions');
+      return response.data;
+    },
+  });
+}
+
+/** Revokes every session of the current user ("sign out everywhere"). */
+export function useSignOutEverywhere() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const response = await apiSend<{ revokedSessions: number }>('/auth/logout-all', 'POST');
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.clear();
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ projects */
+
+/** Archives a project (or restores it). */
+export function useUpdateProject(organizationId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      projectId: string;
+      body: { name?: string; description?: string | null; status?: 'ACTIVE' | 'ARCHIVED' };
+    }) => {
+      const response = await apiSend<ProjectDto>(
+        `/organizations/${organizationId}/projects/${input.projectId}`,
+        'PATCH',
+        input.body,
+      );
+      return response.data;
+    },
+    onSuccess: (project) => {
+      void queryClient.invalidateQueries({ queryKey: ['projects', organizationId] });
+      void queryClient.invalidateQueries({
+        queryKey: ['project', organizationId, project.id],
+      });
     },
   });
 }

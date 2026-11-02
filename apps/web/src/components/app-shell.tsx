@@ -2,6 +2,7 @@
 
 import {
   Avatar,
+  avatarInitials,
   Badge,
   DropdownMenu,
   DropdownMenuContent,
@@ -45,11 +46,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const organizationId = activeOrganizationId ?? '';
+  const isAdmin = activeMembership?.role === 'OWNER' || activeMembership?.role === 'ADMIN';
   const navItems = [
     { href: '/my-work', label: 'My Work' },
     { href: `/organizations/${organizationId}/projects`, label: 'Projects' },
+    { href: `/organizations/${organizationId}/search`, label: 'Search' },
     { href: `/organizations/${organizationId}/directory`, label: 'Directory' },
+    { href: `/organizations/${organizationId}/members`, label: 'Members' },
     { href: `/organizations/${organizationId}/activity`, label: 'Activity' },
+    ...(isAdmin ? [{ href: `/organizations/${organizationId}/audit`, label: 'Audit' }] : []),
   ];
 
   return (
@@ -103,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  aria-label="Account menu"
+                  aria-label={`${avatarInitials(session.user.name)} — account menu`}
                 >
                   <Avatar name={session.user.name} size="sm" />
                 </button>
@@ -118,6 +123,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/my-work">My Work</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/account">Account &amp; sessions</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void signOut()}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>

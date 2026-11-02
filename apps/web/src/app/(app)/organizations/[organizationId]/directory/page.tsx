@@ -45,7 +45,7 @@ export default function DirectoryPage() {
     <>
       <PageHeader
         title="Directory"
-        description="Everyone in this workspace, with their role and status."
+        description="Everyone in this workspace, with their role, join date and workload."
       />
 
       <div className="mb-4 max-w-sm">
@@ -66,15 +66,26 @@ export default function DirectoryPage() {
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((member) => (
             <li key={member.id}>
-              <Card className="flex items-center gap-3 p-4">
+              <Card className="flex items-start gap-3 p-4">
                 <Avatar name={member.name} size="md" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-ink">{member.name}</p>
                   <p className="truncate text-xs text-ink-muted">{member.email}</p>
+                  <p className="mt-1 text-xs text-ink-faint">
+                    Joined {new Date(member.joinedAt).toLocaleDateString()}
+                  </p>
                 </div>
-                <Badge tone={member.role === 'OWNER' ? 'accent' : 'neutral'}>
-                  {ROLE_LABEL[member.role] ?? member.role}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge tone={member.role === 'OWNER' ? 'accent' : 'neutral'}>
+                    {ROLE_LABEL[member.role] ?? member.role}
+                  </Badge>
+                  <span
+                    className="text-xs text-ink-faint"
+                    title="Open tasks assigned to this person"
+                  >
+                    {member.openTaskCount ?? 0} open
+                  </span>
+                </div>
               </Card>
             </li>
           ))}

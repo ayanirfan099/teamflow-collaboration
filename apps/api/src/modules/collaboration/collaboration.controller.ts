@@ -1,16 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   activityQuerySchema,
   commentQuerySchema,
   createCommentRequestSchema,
   markNotificationsReadRequestSchema,
   notificationQuerySchema,
+  updateCommentRequestSchema,
 } from '@teamflow/contracts';
 import { PrismaClient } from '@teamflow/database';
 import { CurrentUser, RequireCapability, Tenant } from '../../common/decorators';
+import { AppException } from '../../common/errors';
 import { decodeCursor, encodeCursor } from '../../common/pagination/cursor';
 import { AuthenticatedUser, TenantContext } from '../../common/types';
 import { parse } from '../../common/validation/parse';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CommentsService } from './comments.service';
 import { NotificationsService } from './notifications.service';
 
@@ -20,6 +23,7 @@ export class CollaborationController {
     private readonly comments: CommentsService,
     private readonly notifications: NotificationsService,
     private readonly prisma: PrismaClient,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   @Get('tasks/:taskId/comments')
@@ -45,6 +49,17 @@ export class CollaborationController {
     return { data: await this.comments.create(tenant, taskId, input.body) };
   }
 
+  @Patch('comments/:commentId')
+  @RequireCapability('comment:update')
+  async updateComment(
+    @Tenant() tenant: TenantContext,
+    @Param('commentId') commentId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(updateCommentRequestSchema, body);
+    return { data: await this.comments.update(tenant, commentId, input.body) };
+  }
+
   @Delete('comments/:commentId')
   @RequireCapability('comment:delete')
   async removeComment(@Tenant() tenant: TenantContext, @Param('commentId') commentId: string) {
@@ -61,6 +76,25 @@ export class CollaborationController {
   ) {
     const params = parse(activityQuerySchema, query);
     return this.activityList(tenant, { ...params, taskId });
+  }
+
+  /**
+   * The ephemeral presence of a task.
+   *
+   * Presence is never persisted and never audited — it only says who has the task open right
+   * now.
+   */
+  @Get('tasks/:taskId/presence')
+  @RequireCapability('task:read')
+  async taskPresence(@Tenant() tenant: TenantContext, @Param('taskId') taskId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId: tenant.organizationId },
+      select: { id: true },
+    });
+    if (!task) {
+      throw AppException.notFound('task');
+    }
+    return { data: this.realtime.presenceOf(taskId) };
   }
 
   @Get('activity')
