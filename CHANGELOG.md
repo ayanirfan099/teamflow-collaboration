@@ -80,12 +80,12 @@ The findings of the end-to-end run and of the accessibility audit of the release
 
 ### Verification
 
-Every statement above was checked by the CI workflow of the release commit
-(`39ee4fb`, run `41428178755`): the build, the lint, the format check, the type check, the unit
-tests of the web app, the database and the contracts, the 55 integration tests of the API, the
-production build of the web app, the end-to-end tests (**8 passed, 1 skipped** — the screenshot
-specification runs in its own job) and the screenshots, which are taken from the real
-application.
+Every statement above was checked by the CI workflow of the release commit: the build, the lint,
+the format check, the type check, the unit tests of the web app, the database and the contracts,
+the 55 integration tests of the API, the production build of the web app, the end-to-end tests
+(**8 passed, 1 skipped** — the screenshot specification runs in its own job) and the
+screenshots, which are taken from the real application. The run of the release is linked in the
+[release notes](https://github.com/ayanirfan099/teamflow-collaboration/releases/tag/v1.0.0).
 
 ### Known limitations
 
