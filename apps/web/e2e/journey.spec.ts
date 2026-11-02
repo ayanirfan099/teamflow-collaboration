@@ -148,7 +148,7 @@ test('a member can complete a task and it leaves the board', async ({ page }) =>
 
   await page.getByText('Ship the release').first().click();
   await page.getByRole('button', { name: 'Mark as completed' }).click();
-  await expect(page.getByText(/Completed/)).toBeVisible();
+  await expect(page.getByRole('dialog')).toContainText('Completed');
 
   // The default board view only shows open tasks.
   await page.getByRole('button', { name: 'Close' }).click();

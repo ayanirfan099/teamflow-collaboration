@@ -38,7 +38,13 @@ async function shoot(page: Page, name: string): Promise<void> {
   for (let index = 0; index < toasts; index += 1) {
     await dismiss.first().click();
   }
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    const dialog = document.querySelector('[role="dialog"]');
+    if (dialog instanceof HTMLElement) {
+      dialog.scrollTop = 0;
+    }
+  });
   await page.waitForTimeout(300);
 
   await mkdir(dirname(join(TARGET, name)), { recursive: true });

@@ -122,10 +122,19 @@ export function useTask(organizationId: string | null, taskId: string | null) {
   });
 }
 
+/**
+ * The members of the workspace.
+ *
+ * The list is short, but it changes: a teammate can join while the board is open. The query is
+ * therefore refetched whenever a component that needs the list is mounted, so the mention
+ * picker and the assignee filter know the current members.
+ */
 export function useMembers(organizationId: string | null) {
   return useQuery({
     queryKey: ['members', organizationId],
     enabled: Boolean(organizationId),
+    staleTime: 5_000,
+    refetchOnMount: 'always',
     queryFn: async () => {
       const response = await apiGet<MemberDto[]>(`/organizations/${organizationId}/members`);
       return response.data;

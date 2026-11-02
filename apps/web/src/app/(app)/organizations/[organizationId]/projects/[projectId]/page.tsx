@@ -103,18 +103,23 @@ export default function ProjectPage() {
         actions={
           <>
             {boardList.length > 1 ? (
-              <Select
-                aria-label="Select board"
-                className="w-48"
-                value={activeBoardId ?? ''}
-                onChange={(event) => setBoardId(event.target.value)}
-              >
-                {boardList.map((board) => (
-                  <option key={board.id} value={board.id}>
-                    {board.name}
-                  </option>
-                ))}
-              </Select>
+              <>
+                <label htmlFor="board-select" className="sr-only">
+                  Select board
+                </label>
+                <Select
+                  id="board-select"
+                  className="w-48"
+                  value={activeBoardId ?? ''}
+                  onChange={(event) => setBoardId(event.target.value)}
+                >
+                  {boardList.map((board) => (
+                    <option key={board.id} value={board.id}>
+                      {board.name}
+                    </option>
+                  ))}
+                </Select>
+              </>
             ) : null}
             <ProjectMenu
               organizationId={organizationId}

@@ -48,7 +48,13 @@ export function Avatar({ name, src, size = 'sm', className, ...props }: AvatarPr
       title={name}
       {...props}
     >
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initials(name)}
+      {src ? (
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        // The initials are a visual abbreviation. They are hidden from the accessibility tree,
+        // so a button that only shows the avatar keeps a name that contains its visible text.
+        <span aria-hidden="true">{initials(name)}</span>
+      )}
       <span className="sr-only">{name}</span>
     </span>
   );
