@@ -43,13 +43,14 @@ Observed baseline and candidate results:
 - API and web production builds passed
 - local web/API development startup and database connectivity passed
 - deterministic screenshot journey passed twice against independently reset databases
+- two independent GitHub Actions runs produced byte-identical canonical screenshots
 - all three screenshots are 1280×720
 
 Validated screenshot hashes:
 
-    077229073c7eccbf6d098d3ddf02e9e8aa433d51e2a70cec1ab297cd24c6e70b  board.png
-    00910809e2956fb5772602fa0c7b3c6d2b26a7f483bb10ef64f42963a35ce5ce  my-work.png
-    c89c6e9dccfcb4c4c9d3185792b6666fc3ba8ceef876de304657e92d23298e1c  task-dialog.png
+    392067f389425aa6216ca83069d4062fcf3bef2a3686a1ecd2ebb879b12c93b8  board.png
+    02967e678d49138c70a6e69b2a88f6c32a91c7f7c13c47603d006a13ad3a385b  my-work.png
+    949e8cec08b6feec68f6e830acd06907e4ffcbcc416166f98c9d49ed81c29f98  task-dialog.png
 
 The final source, build and security gate was repeated after the dependency, documentation and workflow changes:
 
