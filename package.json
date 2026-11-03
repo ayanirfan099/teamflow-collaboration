@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "TeamFlow — multi-tenant project management SaaS",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "engines": {
     "node": ">=20.11.0"
   },
@@ -24,7 +24,7 @@
     "test:e2e": "npm run test:e2e --workspace @teamflow/web",
     "db:migrate": "npm run db:migrate --workspace @teamflow/database",
     "db:deploy": "npm run db:deploy --workspace @teamflow/database",
-    "db:seed": "npm run seed --workspace @teamflow/api",
+    "db:seed": "npm run build --workspace @teamflow/database && npm run seed --workspace @teamflow/api",
     "db:reset": "npm run db:reset --workspace @teamflow/database",
     "db:local": "npm run db:local --workspace @teamflow/database",
     "dev": "npm run build:packages && concurrently -n api,web -c magenta,cyan \"npm run dev --workspace @teamflow/api\" \"npm run dev --workspace @teamflow/web\"",
@@ -34,18 +34,18 @@
     "db:generate": "tsx packages/database/scripts/generate.ts"
   },
   "devDependencies": {
-    "@eslint/js": "9.16.0",
+    "@eslint/js": "9.39.5",
     "@types/node": "22.10.2",
-    "@typescript-eslint/eslint-plugin": "8.18.1",
-    "@typescript-eslint/parser": "8.18.1",
+    "@typescript-eslint/eslint-plugin": "8.72.1",
+    "@typescript-eslint/parser": "8.72.1",
     "concurrently": "9.1.0",
-    "eslint": "9.16.0",
+    "eslint": "9.39.5",
     "eslint-config-prettier": "9.1.0",
     "eslint-plugin-react-hooks": "5.1.0",
     "prettier": "3.4.2",
-    "tsx": "4.19.2",
+    "tsx": "4.23.15",
     "typescript": "5.7.2",
-    "typescript-eslint": "8.18.1"
+    "typescript-eslint": "8.72.1"
   },
   "optionalDependencies": {
     "@embedded-postgres/linux-x64": "17.11.0-beta.19"
@@ -53,6 +53,7 @@
   "overrides": {
     "@nestjs/platform-express": {
       "multer": "2.5.0"
-    }
+    },
+    "postcss": "8.5.32"
   }
 }

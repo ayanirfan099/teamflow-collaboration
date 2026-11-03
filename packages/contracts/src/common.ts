@@ -52,7 +52,7 @@ export const paginationQuerySchema = z.object({
 
 export const successEnvelopeSchema = z.object({
   data: z.unknown(),
-  meta: z.record(z.unknown()).optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const apiErrorSchema = z.object({

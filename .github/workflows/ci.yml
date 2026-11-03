@@ -5,13 +5,18 @@ on:
     branches: [main, 'arena/**']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '22'
+  TZ: UTC
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/teamflow?schema=public
 
 jobs:
@@ -192,12 +197,10 @@ jobs:
           retention-days: 7
 
   screenshots:
-    name: Screenshots
-    runs-on: ubuntu-latest
+    name: Deterministic screenshots
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: build
-    permissions:
-      contents: write
 
     services:
       postgres:
@@ -286,6 +289,9 @@ jobs:
           cat /tmp/web.log
           exit 1
 
+      - name: Seed deterministic fictional demo data
+        run: npm run db:seed
+
       - name: Take the screenshots
         env:
           E2E_WEB_URL: http://localhost:3000
@@ -294,35 +300,12 @@ jobs:
           E2E_SCREENSHOTS: '1'
         run: npx playwright test --config apps/web/playwright.config.ts e2e/screenshots.spec.ts
 
-      - name: Commit the screenshots
-        env:
-          BRANCH: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
-          PUSH_SCREENSHOTS: ${{ github.event_name != 'pull_request' }}
-        run: |
-          # The screenshots are committed by the run of the push. A run that was triggered by
-          # the bot itself would take a new screenshot of a new timestamp and push it again.
-          if [ "$PUSH_SCREENSHOTS" != "true" ]; then
-            echo "the screenshots are committed by the run of the push"
-            exit 0
-          fi
-          if [ "$(git log -1 --format='%an')" = "github-actions[bot]" ]; then
-            echo "the screenshots were refreshed by the previous run"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots
-          if git diff --cached --quiet; then
-            echo "the screenshots did not change"
-          else
-            git commit -m "docs: refresh the screenshots of the README"
-            # The branch can move while the screenshots are taken, so the commit is put on
-            # top of the current head of the branch before it is pushed.
-            git fetch origin "$BRANCH"
-            if git rebase "origin/$BRANCH"; then
-              git push origin "HEAD:$BRANCH"
-            else
-              echo "the branch moved, the screenshots are refreshed in the next run"
-              git rebase --abort
-            fi
-          fi
+      - name: Verify committed screenshots are current
+        run: git diff --exit-code -- docs/screenshots
+
+      - name: Upload deterministic screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: teamflow-screenshots-${{ github.sha }}
+          path: docs/screenshots
+          retention-days: 14
