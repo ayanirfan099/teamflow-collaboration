@@ -10,6 +10,7 @@ import { createPrismaClient } from '@teamflow/database';
 async function main(): Promise<void> {
   const prisma = createPrismaClient();
   const password = await hashPassword('TeamFlow!2026');
+  const demoNow = new Date('2026-01-15T12:00:00.000Z');
 
   const users = [
     { id: '11111111-1111-4111-8111-111111111111', email: 'ada@teamflow.dev', name: 'Ada Lovelace' },
@@ -24,7 +25,7 @@ async function main(): Promise<void> {
   for (const user of users) {
     await prisma.user.upsert({
       where: { email: user.email },
-      update: { name: user.name },
+      update: {},
       create: { ...user, passwordHash: password },
     });
   }
@@ -91,7 +92,7 @@ async function main(): Promise<void> {
   for (const column of columns) {
     await prisma.column.upsert({
       where: { id: column.id },
-      update: { position: column.position },
+      update: {},
       create: {
         id: column.id,
         organizationId,
@@ -157,7 +158,7 @@ async function main(): Promise<void> {
     const dueDate =
       task.dueInDays === undefined
         ? null
-        : new Date(Date.now() + task.dueInDays * 24 * 60 * 60 * 1000);
+        : new Date(demoNow.getTime() + task.dueInDays * 24 * 60 * 60 * 1000);
     await prisma.task.upsert({
       where: { id: task.id },
       update: {},
@@ -173,8 +174,10 @@ async function main(): Promise<void> {
         status: task.status,
         position: task.position,
         dueDate,
-        completedAt: task.status === 'DONE' ? new Date() : null,
+        completedAt: task.status === 'DONE' ? demoNow : null,
         createdById: users[0]!.id,
+        createdAt: demoNow,
+        updatedAt: demoNow,
         assignees: {
           create: [{ organizationId, userId: users[0]!.id }],
         },
@@ -197,7 +200,7 @@ async function main(): Promise<void> {
   });
 
   // eslint-disable-next-line no-console
-  console.log('Seed complete: ada@teamflow.dev / TeamFlow!2026');
+  console.log('Seed complete: fictional demo workspace is ready.');
   await prisma.$disconnect();
 }
 

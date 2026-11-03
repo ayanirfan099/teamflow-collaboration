@@ -1,280 +1,152 @@
-# Deployment
-
-This guide describes how TeamFlow is built, released and operated. Every command in this
-document was executed in the repository — the steps are not hypothetical.
+# Deployment and public-demo guidance
 
----
-
-## 1. What is deployed
-
-| Component       | Image                  | Port | Notes                                                         |
-| --------------- | ---------------------- | ---- | ------------------------------------------------------------- |
-| Web application | `infra/web.Dockerfile` | 3000 | Next.js 15, standalone output, proxies `/api/v1/*` to the API |
-| API             | `infra/api.Dockerfile` | 4000 | NestJS 11, REST under `/api/v1`, Socket.IO under `/socket.io` |
-| Database        | `postgres:17-alpine`   | 5432 | the only stateful service                                     |
-| Migration job   | `infra/api.Dockerfile` | –    | runs once per deploy, applies the SQL migrations              |
+## Status
 
-There is **no Redis**. The rate limiter and the session store live in Postgres, which keeps the
-deployment to three moving parts. See [ADR 0001](../docs/adr/0001-monorepo-npm-workspaces.md)
-and [ADR 0002](../docs/adr/0002-session-auth.md).
+TeamFlow has no verified public deployment. This document describes a deployment runbook and the controls required before a shared demo; it is not evidence that those controls are operating at a public URL.
 
----
-
-## 2. Building the images
-
-```bash
-docker build -f infra/api.Dockerfile -t teamflow-api .
-docker build -f infra/web.Dockerfile -t teamflow-web .
-```
-
-Both images are multi-stage builds: the first stage installs the workspace and compiles the
-TypeScript, the second stage contains only the runtime dependencies and the compiled output.
-The API image therefore has no compiler and no test tooling in it.
-
-### The image content
-
-- **API image** — `apps/api/dist`, `packages/contracts/dist`, `packages/database/dist`
-  (including the generated Prisma client and the SQL migrations) and the production
-  dependencies.
-- **Web image** — `apps/web/.next`, `packages/ui/dist`, `packages/contracts/dist` and the
-  production dependencies.
-
-The Prisma client is generated **without a native engine** (ADR 0008): the query compiler runs
-as WebAssembly, so no binary has to match the platform of the image.
-
----
-
-## 3. The environment
-
-Copy `.env.example` and fill in the values. **Never commit a filled-in `.env`** — the file is
-ignored by git, and in production every secret comes from a secret store.
-
-| Variable                                                                            | Required                 | Default                                                                | Description                                                                    |
-| ----------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `DATABASE_URL`                                                                      | yes                      | `postgresql://postgres:postgres@127.0.0.1:5432/teamflow?schema=public` | the connection string; `schema` selects the schema the API works in            |
-| `SESSION_SECRET`                                                                    | **yes in production**    | –                                                                      | 32 random bytes, hex encoded. The API refuses to start without it.             |
-| `PORT`                                                                              | no                       | `4000`                                                                 | the port of the API                                                            |
-| `NODE_ENV`                                                                          | no                       | `development`                                                          | `production` switches the strict cookie defaults                               |
-| `LOG_LEVEL`                                                                         | no                       | `info`                                                                 | `debug`, `info`, `warn` or `error`                                             |
-| `CORS_ORIGINS`                                                                      | yes                      | `http://localhost:3000`                                                | comma separated list of origins that may send credentialed requests            |
-| `COOKIE_SECURE`                                                                     | in production            | `false`                                                                | **has to be `true`** when the app is served over HTTPS                         |
-| `COOKIE_SAME_SITE`                                                                  | no                       | `lax`                                                                  | `none` is needed when the API runs on a sibling subdomain                      |
-| `COOKIE_DOMAIN`                                                                     | no                       | –                                                                      | shared parent domain, e.g. `.example.com`                                      |
-| `SESSION_TTL_DAYS`                                                                  | no                       | `30`                                                                   | the lifetime of a session                                                      |
-| `API_URL`                                                                           | yes (web)                | `http://localhost:4000`                                                | the API URL of the **server side** rewrite proxy; it never reaches the browser |
-| `NEXT_PUBLIC_API_URL`                                                               | yes (web)                | `http://localhost:4000`                                                | the **public** API URL, used by the browser for the WebSocket handshake        |
-| `STORAGE_DRIVER`                                                                    | no                       | `local`                                                                | `local` or `s3`                                                                |
-| `STORAGE_DIR`                                                                       | no                       | `var/uploads`                                                          | the target folder of the local adapter                                         |
-| `MAX_UPLOAD_BYTES`                                                                  | no                       | `10485760`                                                             | 10 MiB                                                                         |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | with `STORAGE_DRIVER=s3` | –                                                                      | the credentials of the S3 adapter                                              |
-| `RATE_LIMIT_ENABLED`                                                                | no                       | `true`                                                                 | the global rate limit                                                          |
-| `RATE_LIMIT_WINDOW_SECONDS`                                                         | no                       | `60`                                                                   | the window of the global rate limit                                            |
-| `RATE_LIMIT_MAX_REQUESTS`                                                           | no                       | `120`                                                                  | the requests per window and client                                             |
-
-Generate a session secret with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
----
-
-## 4. Running the stack locally with Docker
-
-```bash
-cp .env.example .env
-# set SESSION_SECRET in .env
-docker compose -f infra/docker-compose.yml up --build
-```
-
-| Service  | URL                   | Notes                                                                 |
-| -------- | --------------------- | --------------------------------------------------------------------- |
-| Web app  | http://localhost:3000 | proxies `/api/v1/*` to the API (the session cookie stays same-origin) |
-| API      | http://localhost:4000 | REST under `/api/v1`, Socket.IO under `/socket.io`                    |
-| Postgres | localhost:5432        | the `teamflow` database                                               |
-
-The `migrate` service applies `packages/database/prisma/migrations/**` before the API starts.
-The migrations are plain SQL files with a checksum, so the step is idempotent and can run on
-every deploy.
-
-### Without Docker
-
-The database package ships the PostgreSQL binaries of `@embedded-postgres/linux-x64` and can
-start a throwaway server — this is the mode the integration tests use.
+## Supported topology
 
-```bash
-npm run db:local --workspace @teamflow/database   # prints a DATABASE_URL
-npm run db:migrate --workspace @teamflow/database
-npm run start --workspace @teamflow/api
-npm run dev --workspace @teamflow/web
-```
-
----
+| Component           | Responsibility                                                | State and scaling boundary                                 |
+| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| Next.js web         | UI, server rendering and same-origin REST proxy               | Stateless; may run separately from the API                 |
+| NestJS API          | REST, sessions, authorization, Socket.IO and storage access   | One instance is the supported v1 topology                  |
+| PostgreSQL          | Application data, sessions, audit history and migration state | Required persistent service with backups                   |
+| Attachment storage  | Local persistent volume or S3-compatible storage              | Local storage is single-instance only                      |
+| Redis or equivalent | Socket.IO fan-out and coordinated distributed controls        | Optional future dependency; no adapter is implemented here |
 
-## 5. The release of a new version
+The repository includes `infra/api.Dockerfile`, `infra/web.Dockerfile` and `infra/docker-compose.yml`. Compose is suitable for local verification; a production platform still needs managed secrets, HTTPS, backups, monitoring and reviewed network boundaries.
 
-The released versions are tagged on `main`; the notes of every version are in
-[`CHANGELOG.md`](../CHANGELOG.md). The procedure below builds the images of a new version:
+## Build and release sequence
 
-```bash
-# 1. build everything exactly as CI does
-npm ci --no-audit --no-fund
-npm run db:generate
-npm run build:packages
-npm run build --workspace @teamflow/api
-npm run build --workspace @teamflow/web
+    npm ci --no-audit --no-fund
+    npm run db:generate
+    npm run format:check
+    npm run lint
+    npm run typecheck
+    npm test
+    npm run build
 
-# 2. run the checks
-npm run lint
-npm run test --workspace @teamflow/api
-
-# 3. build the images
-docker build -f infra/api.Dockerfile -t teamflow-api:${VERSION} .
-docker build -f infra/web.Dockerfile -t teamflow-web:${VERSION} .
+    docker build -f infra/api.Dockerfile -t teamflow-api:${VERSION} .
+    docker build -f infra/web.Dockerfile -t teamflow-web:${VERSION} .
 
-# 4. apply the migrations (idempotent, before the new API starts)
-docker run --rm --env-file .env teamflow-api:${VERSION} \
-  node packages/database/dist/cli/migrate.js
+Deploy in this order:
 
-# 5. roll the API, then the web application
-docker compose -f infra/docker-compose.yml up -d api
-docker compose -f infra/docker-compose.yml up -d web
-```
+1. back up PostgreSQL and verify restore procedures;
+2. apply the checked-in SQL migrations once;
+3. wait for migration success;
+4. deploy the API and verify liveness/readiness;
+5. deploy the web application;
+6. run authentication, authorization and WebSocket smoke tests;
+7. verify logs, metrics, attachment access and rollback controls.
 
-**Order matters:** the migrations run first, the API is rolled second, the web application
-last. The migrations are additive (a new column, a new enum value), so the old API keeps
-working while the new one starts.
+Do not run the demo seed during a normal production deployment.
 
----
+## Runtime configuration
 
-## 6. Health, logs and monitoring
+Supply configuration through the platform's secret/configuration service. Never commit a filled `.env`, print it in CI, or place secrets in image layers.
 
-| Endpoint                   | Meaning                                                        |
-| -------------------------- | -------------------------------------------------------------- |
-| `GET /api/v1/health/live`  | liveness — the process answers                                 |
-| `GET /api/v1/health/ready` | readiness — the database answers (`degraded` when it does not) |
+Required categories:
 
-Both endpoints are public and never contain details about the database.
+- private PostgreSQL connection URL;
+- unique high-entropy session secret;
+- canonical web/API origins and CORS allowlist;
+- secure cookie mode and an appropriate same-site/domain policy;
+- API and public WebSocket URLs;
+- attachment driver, size limit and storage configuration;
+- enabled, bounded rate-limit settings;
+- production log level.
 
-Every request gets a request id (`x-request-id`), and the API writes one structured log line
-per request as JSON to stdout:
+Secure cookies are required behind HTTPS. If web and API use sibling subdomains, cookie domain and same-site settings must be reviewed together with the WebSocket handshake. Prefer a same-origin reverse proxy where practical.
 
-```json
-{
-  "level": "info",
-  "time": "2026-11-02T08:49:06.146Z",
-  "message": "request completed",
-  "context": {
-    "requestId": "904ddfb4-54cf-459f-b61c-44df6d0a3be8",
-    "method": "GET",
-    "path": "/api/v1/organizations/tasks",
-    "status": 200,
-    "durationMs": 8
-  }
-}
-```
+## Health and observability
 
-The line contains the request id, the method, the path, the status and the duration — never a
-query string, a body, a cookie or a header.
+| Endpoint                   | Purpose                   |
+| -------------------------- | ------------------------- |
+| `GET /api/v1/health/live`  | Process liveness          |
+| `GET /api/v1/health/ready` | Database-backed readiness |
 
-The logs contain no session cookies, no passwords and no file contents. Collect them with the
-log agent of your platform (the Docker images write to stdout, so every collector works).
+The API emits structured request logs with request ID, method, path, status and duration. Production collection must exclude cookies, authorization material, request bodies and uploaded file contents.
 
-Recommended alerts:
+Recommended alerts include sustained readiness failure, elevated server-error rate, abnormal authentication failures, exhausted database connections and storage failures.
 
-- the readiness probe fails for more than one minute,
-- the p95 of the request duration is above the values in [benchmarks.md](benchmarks.md) for
-  five minutes,
-- the error rate of the API is above 1 %.
+## PostgreSQL and migrations
 
----
+- Keep PostgreSQL private to the API and migration job.
+- Run migrations as a dedicated one-shot deployment step.
+- Use least-privilege runtime and migration roles where supported.
+- Back up before migration and test restoration periodically.
+- Retain migration history and never edit an applied migration.
+- Use a connection pool appropriate to the number of API instances.
 
-## 7. The proxy and the cookies
+A database dump does not include objects stored in S3-compatible storage or a local attachment volume; back those up separately.
 
-The browser never talks to the API directly: the Next.js application rewrites `/api/v1/*` to
-`API_URL`, so the session cookie is a first-party cookie and the CSRF token never has to
-travel to a third party.
+## Attachment storage
 
-The **WebSocket** handshake is the exception: `socket.io-client` connects to
-`NEXT_PUBLIC_API_URL`. When the API runs on a sibling subdomain, three values have to be
-aligned:
+### Local driver
 
-```bash
-COOKIE_SECURE=true
-COOKIE_SAME_SITE=none
-COOKIE_DOMAIN=.example.com
-```
+Use only for one API instance with a persistent, backed-up volume. Ephemeral container filesystems will lose uploads during replacement.
 
-The socket is authorised with the session cookie during the handshake, and every room the
-client joins is re-authorised against the tenant of the session. An unauthorised socket never
-receives an event.
+### S3-compatible driver
 
----
+Use for durable or multi-instance deployments. Keep the bucket private, rotate access credentials, enable encryption and lifecycle policies, and preserve API authorization in front of every download. Do not expose objects through public bucket URLs.
 
-## 8. The attachments
+TeamFlow validates an upload allowlist, size limit and known file signatures, but does not include malware scanning. A public upload service needs quarantine, scanning and abuse controls.
 
-The default is the local adapter: the files are written into `STORAGE_DIR` and served through
-the API, which checks the permission before every download. The download is sent with
-`Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`, and only the file
-types of the allowlist are accepted.
+## Multiple API instances and optional Redis
 
-For a production installation with more than one API instance, switch to the S3 adapter:
+Sessions are stored in PostgreSQL, but Socket.IO room state, presence and the built-in rate limiter are process-local.
 
-```bash
-STORAGE_DRIVER=s3
-S3_REGION=eu-central-1
-S3_BUCKET=teamflow-attachments
-S3_ACCESS_KEY_ID=…
-S3_SECRET_ACCESS_KEY=…
-```
+Before adding API replicas:
 
-The storage key is random (`crypto.randomUUID`), never the file name of the user, so a file
-cannot be guessed and the name of the file cannot be used to inject a path.
-
----
-
-## 9. The backup of the database
-
-The only state that cannot be rebuilt is the database. A backup is a `pg_dump` of the schema
-the API uses:
-
-```bash
-pg_dump --format=custom --file teamflow-$(date +%F).dump "$DATABASE_URL"
-```
-
-Restore it into an empty database and apply the migrations afterwards:
-
-```bash
-pg_restore --dbname "$DATABASE_URL" --clean --if-exists teamflow-2026-11-02.dump
-npm run db:migrate --workspace @teamflow/database
-```
-
-When the S3 adapter is used, the attachments live in the bucket and are **not** part of the
-dump — the bucket needs its own versioning or replication.
-
----
-
-## 10. Scaling
-
-- **The API is stateless.** The session lives in the database, so any number of instances can
-  serve the requests. A new instance only needs `DATABASE_URL` and `SESSION_SECRET`.
-- **The WebSocket gateway is stateless as well.** The rooms are held in the memory of the
-  instance; a client that is connected to instance A does not receive the events of instance
-  B. With more than one instance a Socket.IO adapter (Redis) is needed — this is not part of
-  v1.0.0 and is listed in [out-of-scope.md](out-of-scope.md).
-- **The database is the bottleneck** long before the API is. The queries are indexed by
-  `organizationId`, so a bigger instance and a connection pool are the first steps.
-
----
-
-## 11. The checklist before a release
-
-- [ ] `npm run lint` is green
-- [ ] `npm run test --workspace @teamflow/api` is green
-- [ ] `npm run build --workspace @teamflow/web` is green
-- [ ] the end-to-end job of the CI is green
-- [ ] `SESSION_SECRET` is set in the secret store (and is **not** the development value)
-- [ ] `COOKIE_SECURE=true` and `CORS_ORIGINS` contain the public URL
-- [ ] the migrations were applied and the API starts
-- [ ] `GET /api/v1/health/ready` answers with `ok`
-- [ ] a backup of the database was taken before the migration
+- implement and test a supported Socket.IO adapter such as Redis;
+- use an external/global rate limiter or trusted edge limit;
+- configure sticky behavior only if required by the selected transport;
+- verify events and authorization across instances;
+- use shared S3-compatible attachment storage.
+
+Do not claim horizontal real-time support until those adapters and cross-instance tests exist.
+
+## Safe shared-demo controls
+
+The repository does not contain a one-switch public-demo mode. A shared demo must therefore be isolated and constrained at the gateway and platform boundaries.
+
+Minimum controls:
+
+1. use a disposable database and storage namespace containing only fictional data;
+2. do not publish shipped privileged local fixture credentials;
+3. provision a separate fictional viewer or enforce read-only access;
+4. deny public registration and invitation creation/acceptance routes;
+5. deny attachment upload/removal unless a bounded, scanned path is provided;
+6. allow only methods and routes required for the intended tour;
+7. keep one API instance unless distributed adapters are implemented;
+8. enforce both edge and application rate limits;
+9. reset database, sessions and storage on a documented schedule and after abuse;
+10. collect no real names, email addresses, customer data or files;
+11. verify denied routes with automated HTTP checks before publishing a URL.
+
+There is no email-delivery integration. Invitations are application-local and expose acceptance information to an authorized inviter, which is another reason to block invitation routes in a public demo.
+
+A public URL must not be added to the README until it has been manually verified over HTTPS with these controls.
+
+## Local Compose verification
+
+    cp .env.example .env
+    # Replace placeholders privately.
+    docker compose -f infra/docker-compose.yml up --build
+
+Local defaults expose the web application on port 3000, the API on port 4000 and PostgreSQL on the configured local database port. They are development defaults, not production secret or network policy.
+
+## Release checklist
+
+- [ ] locked installation, formatting, lint, type checks, tests and production builds pass
+- [ ] dependency and full-history secret scans pass
+- [ ] migrations succeed from an empty database and on the current backup
+- [ ] rollback and database restore procedures are tested
+- [ ] runtime and migration credentials follow least privilege
+- [ ] HTTPS, canonical origins, CORS and secure cookies are verified
+- [ ] registration, invitations and uploads follow the intended exposure policy
+- [ ] edge and application rate limits are enabled and tested
+- [ ] database and attachment backups are operating
+- [ ] health checks, logs, metrics and alerts are operating
+- [ ] no seed or fixture credentials are used in a shared environment
+- [ ] any claimed public URL has been manually verified

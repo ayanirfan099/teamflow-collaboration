@@ -1,10 +1,6 @@
-import {
-  OpenApiGeneratorV31,
-  OpenAPIRegistry,
-  RouteConfig,
-  extendZodWithOpenApi,
-} from '@asteasolutions/zod-to-openapi';
+import { OpenApiGeneratorV31, OpenAPIRegistry, RouteConfig } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import './zod-openapi.init';
 import {
   acceptInvitationRequestSchema,
   createInvitationRequestSchema,
@@ -29,8 +25,6 @@ import {
   updateCommentRequestSchema,
 } from '@teamflow/contracts';
 
-extendZodWithOpenApi(z);
-
 /**
  * The OpenAPI document of the API.
  *
@@ -41,18 +35,18 @@ extendZodWithOpenApi(z);
 const registry = new OpenAPIRegistry();
 
 // The schemas of the shared contracts become the components of the document.
-registry.register('User', userSchema);
-registry.register('Membership', membershipSchema);
-registry.register('Session', sessionSchema);
-registry.register('Organization', organizationSchema);
-registry.register('Member', memberSchema);
-registry.register('Invitation', invitationSchema);
-registry.register('Project', projectSchema);
-registry.register('Board', boardSchema);
-registry.register('Column', columnSchema);
-registry.register('Label', labelSchema);
-registry.register('Task', taskSchema);
-registry.register('Attachment', attachmentSchema);
+registry.register('User', userSchema.clone());
+registry.register('Membership', membershipSchema.clone());
+registry.register('Session', sessionSchema.clone());
+registry.register('Organization', organizationSchema.clone());
+registry.register('Member', memberSchema.clone());
+registry.register('Invitation', invitationSchema.clone());
+registry.register('Project', projectSchema.clone());
+registry.register('Board', boardSchema.clone());
+registry.register('Column', columnSchema.clone());
+registry.register('Label', labelSchema.clone());
+registry.register('Task', taskSchema.clone());
+registry.register('Attachment', attachmentSchema.clone());
 
 registry.registerPath({
   method: 'get',

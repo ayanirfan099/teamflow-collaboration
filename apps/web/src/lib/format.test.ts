@@ -34,10 +34,10 @@ describe('isOverdue', () => {
 
 describe('isSameDay', () => {
   it('compares calendar days', () => {
-    const a = new Date('2030-01-02T01:00:00.000Z');
-    const b = new Date('2030-01-02T23:00:00.000Z');
+    const a = new Date(2030, 0, 2, 1);
+    const b = new Date(2030, 0, 2, 23);
     expect(isSameDay(a, b)).toBe(true);
-    expect(isSameDay(a, new Date('2030-01-03T01:00:00.000Z'))).toBe(false);
+    expect(isSameDay(a, new Date(2030, 0, 3, 1))).toBe(false);
   });
 });
 
