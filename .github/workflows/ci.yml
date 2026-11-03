@@ -304,6 +304,7 @@ jobs:
         run: git diff --exit-code -- docs/screenshots
 
       - name: Upload deterministic screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: teamflow-screenshots-${{ github.sha }}
